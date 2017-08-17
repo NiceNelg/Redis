@@ -51,6 +51,8 @@ typedef char *sds;
 //struct my{ char ch; int a;} sizeof(int)=4;sizeof(my)=8;（非紧凑模式）
 //struct my{ char ch; int a;}__attrubte__ ((packed)) sizeof(int)=4;sizeof(my)=5（紧凑模式,char类型占1字节）
 //若数据按对齐模式写入,如int为4字节,但实际上只占3字节,那么多出来的1字节将会被填充,在对数据进行移位操作时将会得出数据不正确的情况
+
+//结构体字段说明 len:现存字符串长度 alloc:字符串最大容量 flags:标志位 buf:字符串存放位置
 struct __attribute__ ((__packed__)) sdshdr5 {
     unsigned char flags; /* 3 lsb of type, and 5 msb of string length */
 		//柔性数组,柔性数组成员只作为一个符号地址存在，而且必须是结构体的最后一个成员，sizeof 返回的这种结构大小不包括柔性数组的内存
@@ -58,6 +60,7 @@ struct __attribute__ ((__packed__)) sdshdr5 {
 		//struct sdshdr5 *p = ( struct sdshdr5 *)malloc( sizeof( sdshdr5) + 50 ),多出来的50即是柔性数组的长度范围,即char buf[50]
     char buf[];
 };
+
 struct __attribute__ ((__packed__)) sdshdr8 {
     uint8_t len; /* used */
     uint8_t alloc; /* excluding the header and null terminator */
@@ -125,14 +128,18 @@ static inline size_t sdslen(const sds s) {
     return 0;
 }
 
+//获取字符串剩余空间
 static inline size_t sdsavail(const sds s) {
-    unsigned char flags = s[-1];
+    //如上
+		unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
         case SDS_TYPE_5: {
             return 0;
         }
         case SDS_TYPE_8: {
+						//根据宏定义获取的结构体指针变量为sh
             SDS_HDR_VAR(8,s);
+						//返回字符串容器剩余容量
             return sh->alloc - sh->len;
         }
         case SDS_TYPE_16: {
