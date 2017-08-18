@@ -52,37 +52,69 @@ typedef char *sds;
 //struct my{ char ch; int a;}__attrubte__ ((packed)) sizeof(int)=4;sizeof(my)=5（紧凑模式,char类型占1字节）
 //若数据按对齐模式写入,如int为4字节,但实际上只占3字节,那么多出来的1字节将会被填充,在对数据进行移位操作时将会得出数据不正确的情况
 
-//结构体字段说明 len:现存字符串长度 alloc:字符串最大容量 flags:标志位 buf:字符串存放位置
+/*
+ * 以下程序涉及类型的字节位运算,附上Linux系统的类型长度:
+ * 
+ * Linux系统32位与64位GCC编译器基本数据类型长度对照表
+ * 
+ * GCC 32位
+ * sizeof(char)=1
+ * sizeof(double)=8
+ * sizeof(float)=4
+ * sizeof(int)=4
+ * sizeof(short)=2
+ * sizeof(long)=4
+ * sizeof(long long)=8
+ * sizeof(long double)=12
+ * sizeof(complex long double)=24
+ * 
+ * GCC 64位
+ * sizeof(char)=1
+ * sizeof(double)=8
+ * sizeof(float)=4
+ * sizeof(int)=4
+ * sizeof(short)=2
+ * sizeof(long)=8
+ * sizeof(long long)=8
+ * sizeof(long double)=16
+ * sizeof(complex long double)=32
+ *
+ */
+
+//sdshdr5与其它几个header结构不同，它不包含alloc字段，而长度使用flags的高5位来存储。
+//因此，它不能为字符串分配空余空间。如果字符串需要动态增长，那么它就必然要重新分配内存才行。
+//所以说，这种类型的sds字符串更适合存储静态的短字符串（长度小于32）。
 struct __attribute__ ((__packed__)) sdshdr5 {
-    unsigned char flags; /* 3 lsb of type, and 5 msb of string length */
+    unsigned char flags; /* 3 lsb of type, and 5 msb of string length */	//最大值:0xF8
 		//柔性数组,柔性数组成员只作为一个符号地址存在，而且必须是结构体的最后一个成员，sizeof 返回的这种结构大小不包括柔性数组的内存
 		//在使用malloc分配内存时需要分配多余的空间给予柔性数组使用,如: 
 		//struct sdshdr5 *p = ( struct sdshdr5 *)malloc( sizeof( sdshdr5) + 50 ),多出来的50即是柔性数组的长度范围,即char buf[50]
     char buf[];
 };
 
+//结构体字段说明 len:现存字符串长度 alloc:字符串最大容量 flags:标志位 buf:字符串存放位置
 struct __attribute__ ((__packed__)) sdshdr8 {
     uint8_t len; /* used */
     uint8_t alloc; /* excluding the header and null terminator */
-    unsigned char flags; /* 3 lsb of type, 5 unused bits */
+    unsigned char flags; /* 3 lsb of type, 5 unused bits */	//0x01
     char buf[];
 };
 struct __attribute__ ((__packed__)) sdshdr16 {
     uint16_t len; /* used */
     uint16_t alloc; /* excluding the header and null terminator */
-    unsigned char flags; /* 3 lsb of type, 5 unused bits */
+    unsigned char flags; /* 3 lsb of type, 5 unused bits */	//0x02
     char buf[];
 };
 struct __attribute__ ((__packed__)) sdshdr32 {
     uint32_t len; /* used */
     uint32_t alloc; /* excluding the header and null terminator */
-    unsigned char flags; /* 3 lsb of type, 5 unused bits */
+    unsigned char flags; /* 3 lsb of type, 5 unused bits */ //0x03
     char buf[];
 };
 struct __attribute__ ((__packed__)) sdshdr64 {
     uint64_t len; /* used */
     uint64_t alloc; /* excluding the header and null terminator */
-    unsigned char flags; /* 3 lsb of type, 5 unused bits */
+    unsigned char flags; /* 3 lsb of type, 5 unused bits */ //0x04
     char buf[];
 };
 
@@ -94,6 +126,7 @@ struct __attribute__ ((__packed__)) sdshdr64 {
 #define SDS_TYPE_64 4
 //类型掩码
 #define SDS_TYPE_MASK 7
+//偏移位
 #define SDS_TYPE_BITS 3
 //函数式宏定义
 //返回sdshdrT类型结构体指针
@@ -102,6 +135,7 @@ struct __attribute__ ((__packed__)) sdshdr64 {
 #define SDS_TYPE_5_LEN(f) ((f)>>SDS_TYPE_BITS)
 
 //计算字符串长度
+//inline 内联函数关键字,使用在函数声明处，表示程序员请求编译器在此函数的被调用处将此函数实现插入，而不是像普通函数那样生成调用代码
 static inline size_t sdslen(const sds s) {
 		//这里传进来的形参s是上述结构体中的一种.由于每个结构体都取消对齐,因此在内存中结构体的数据是这样的
 		//len | alloc | flags | buf
@@ -111,6 +145,7 @@ static inline size_t sdslen(const sds s) {
 		//根据flags标志和类型掩码的取余获取是哪个结构体
     switch(flags&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
+						//由sdshdr5结构体定义可知字节长度信息包含在flags中的高5位,因此根据宏定义可知字符串长度等于flags右移3位
             return SDS_TYPE_5_LEN(flags);
         case SDS_TYPE_8:
 						//结构体首地址计算解析:
@@ -134,6 +169,7 @@ static inline size_t sdsavail(const sds s) {
 		unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
         case SDS_TYPE_5: {
+						//sdshdr5无法得知字符串剩余容量
             return 0;
         }
         case SDS_TYPE_8: {
@@ -158,12 +194,26 @@ static inline size_t sdsavail(const sds s) {
     return 0;
 }
 
+//设置结构体buf长度
 static inline void sdssetlen(sds s, size_t newlen) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
             {
+								//如s[-1],可以这样看这条语句 ( unsigned char *) fp = ( ( unsigned char *)s ) - 1
+								//注:( unsigned char * )s只是强制转换类型,并不是操作*s指针
                 unsigned char *fp = ((unsigned char*)s)-1;
+								//改变flags的值 
+								//因为size_t为4字节长度( 32位 ),但是flags为char *类型,因为flags只有一字节( 8位 ),
+								//高5位存字符串长度,低3位用来与类型掩码相与或者结构体类型,因此新长度的数值所占位数最多为5位( 即32位 ),
+								//与0或运算后得到新的flags,如:
+								//
+								//newlen能设置的最大值
+								//0000 0000 0000 0000 0000 0000 0001 1111
+								//左移3位
+								//0000 0000 0000 0000 0000 0000 1111 1000
+								//与0进行或运算
+								//0000 0000 0000 0000 0000 0000 1111 1000
                 *fp = SDS_TYPE_5 | (newlen << SDS_TYPE_BITS);
             }
             break;
