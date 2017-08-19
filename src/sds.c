@@ -37,7 +37,9 @@
 #include <assert.h>
 #include "sds.h"
 #include "sdsalloc.h"
+//sdsalloc.h头文件中定义了字符串别名 为的是方便使用zmalloc的函数
 
+//传入flags字段 获取结构体长度
 static inline int sdsHdrSize(char type) {
     switch(type&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
@@ -54,13 +56,16 @@ static inline int sdsHdrSize(char type) {
     return 0;
 }
 
+//比较传入字符串长度获取结构体类型对应的掩码
 static inline char sdsReqType(size_t string_size) {
+		//1左移5位后的二进制装换成数字是32,其他一样
     if (string_size < 1<<5)
         return SDS_TYPE_5;
     if (string_size < 1<<8)
         return SDS_TYPE_8;
     if (string_size < 1<<16)
         return SDS_TYPE_16;
+		//1ll表示long long int类型数据的 1 
     if (string_size < 1ll<<32)
         return SDS_TYPE_32;
     return SDS_TYPE_64;
@@ -78,22 +83,34 @@ static inline char sdsReqType(size_t string_size) {
  * You can print the string with printf() as there is an implicit \0 at the
  * end of the string. However the string is binary safe and can contain
  * \0 characters in the middle, as the length is stored in the sds header. */
+
+//根据传入字符串的内容和长度初始化结构体
 sds sdsnewlen(const void *init, size_t initlen) {
     void *sh;
     sds s;
+		//获取结构体对应的掩码
     char type = sdsReqType(initlen);
     /* Empty strings are usually created in order to append. Use type 8
      * since type 5 is not good at this. */
+		//如果传入的是空字符串且长度设置为0则使用sdshdr8结构体,因为sdshdr5结构体不再适用
     if (type == SDS_TYPE_5 && initlen == 0) type = SDS_TYPE_8;
-    int hdrlen = sdsHdrSize(type);
+    //获取结构体大小
+		int hdrlen = sdsHdrSize(type);
+		//定义flags字段指针
     unsigned char *fp; /* flags pointer. */
 
+		//根据sdsalloc头文件的宏定义可知s_malloc调用的是zmalloc函数,因为sdshdr的所有结构体的buf都是柔性数组,在计算sdshr结构体大小的时候
+		//buf的长度并没有计算在内,因此在跟sdshr结构体分配内存的时候需要加上buf数组的长度在加1( 用以存储\0符号 )
     sh = s_malloc(hdrlen+initlen+1);
+		//如果init( init代表的是字符串 )为空,则设置sh为空
     if (!init)
         memset(sh, 0, hdrlen+initlen+1);
     if (sh == NULL) return NULL;
+		//设置字符串的首地址
     s = (char*)sh+hdrlen;
+		//设置flags字段的首地址
     fp = ((unsigned char*)s)-1;
+		//初始化结构体
     switch(type) {
         case SDS_TYPE_5: {
             *fp = type | (initlen << SDS_TYPE_BITS);
@@ -128,6 +145,7 @@ sds sdsnewlen(const void *init, size_t initlen) {
             break;
         }
     }
+		//初始化结构体的buf字段
     if (initlen && init)
         memcpy(s, init, initlen);
     s[initlen] = '\0';
@@ -136,10 +154,11 @@ sds sdsnewlen(const void *init, size_t initlen) {
 
 /* Create an empty (zero length) sds string. Even in this case the string
  * always has an implicit null term. */
+//创建sdshr8空结构体
 sds sdsempty(void) {
     return sdsnewlen("",0);
 }
-
+//包装函数,对sdsnewlen函数进行包装
 /* Create a new sds string starting from a null terminated C string. */
 sds sdsnew(const char *init) {
     size_t initlen = (init == NULL) ? 0 : strlen(init);
@@ -147,11 +166,13 @@ sds sdsnew(const char *init) {
 }
 
 /* Duplicate an sds string. */
+//用于根据字符串复制结构体
 sds sdsdup(const sds s) {
     return sdsnewlen(s, sdslen(s));
 }
 
 /* Free an sds string. No operation is performed if 's' is NULL. */
+//销毁字符串时释放结构体空间和更新用户使用空间
 void sdsfree(sds s) {
     if (s == NULL) return;
     s_free((char*)s-sdsHdrSize(s[-1]));
@@ -171,6 +192,8 @@ void sdsfree(sds s) {
  * The output will be "2", but if we comment out the call to sdsupdatelen()
  * the output will be "6" as the string was modified but the logical length
  * remains 6 bytes. */
+
+//更新结构体中len的数据
 void sdsupdatelen(sds s) {
     int reallen = strlen(s);
     sdssetlen(s, reallen);
@@ -180,6 +203,7 @@ void sdsupdatelen(sds s) {
  * However all the existing buffer is not discarded but set as free space
  * so that next append operations will not require allocations up to the
  * number of bytes previously available. */
+//清空结构体中len的数据和buf数据
 void sdsclear(sds s) {
     sdssetlen(s, 0);
     s[0] = '\0';

@@ -129,9 +129,11 @@ struct __attribute__ ((__packed__)) sdshdr64 {
 //偏移位
 #define SDS_TYPE_BITS 3
 //函数式宏定义
-//返回sdshdrT类型结构体指针
+//返回指定类型结构体指针
 #define SDS_HDR_VAR(T,s) struct sdshdr##T *sh = (void*)((s)-(sizeof(struct sdshdr##T)));
+//返回指定类型结构体指针首地址
 #define SDS_HDR(T,s) ((struct sdshdr##T *)((s)-(sizeof(struct sdshdr##T))))
+//返回sdshdr5结构体buf长度
 #define SDS_TYPE_5_LEN(f) ((f)>>SDS_TYPE_BITS)
 
 //计算字符串长度
@@ -232,13 +234,17 @@ static inline void sdssetlen(sds s, size_t newlen) {
     }
 }
 
+//增加字符串指针对应的结构体的len长度
 static inline void sdsinclen(sds s, size_t inc) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
             {
+								//获取sdshdr5结构体的flags
                 unsigned char *fp = ((unsigned char*)s)-1;
+								//计算结构体先有的长度并增加
                 unsigned char newlen = SDS_TYPE_5_LEN(flags)+inc;
+								//设置sdshdr5结构体的buf长度
                 *fp = SDS_TYPE_5 | (newlen << SDS_TYPE_BITS);
             }
             break;
@@ -257,6 +263,7 @@ static inline void sdsinclen(sds s, size_t inc) {
     }
 }
 
+//返回结构体的buf总容量
 /* sdsalloc() = sdsavail() + sdslen() */
 static inline size_t sdsalloc(const sds s) {
     unsigned char flags = s[-1];
@@ -275,6 +282,7 @@ static inline size_t sdsalloc(const sds s) {
     return 0;
 }
 
+//设置结构体的alloc
 static inline void sdssetalloc(sds s, size_t newlen) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
@@ -309,9 +317,16 @@ sds sdscpylen(sds s, const char *t, size_t len);
 sds sdscpy(sds s, const char *t);
 
 sds sdscatvprintf(sds s, const char *fmt, va_list ap);
+//判断是否在GNUC环境编译程序
 #ifdef __GNUC__
 sds sdscatprintf(sds s, const char *fmt, ...)
     __attribute__((format(printf, 2, 3)));
+		// __attribute__((format(printf, 2, 3)));
+		// 这句主要作用是提示编译器，对这个函数的调用需要像printf一样，用对应的format字符串来check可变参数的数据类型。
+		// format ( printf, 2, 3)告诉编译器，fmt相当于printf的format，而可变参数是从sdscatprintf的第3个参数开始
+		//  __attribute__((format(printf, m, n)));
+		// m：第几个参数为格式化字符串（format string）；
+		// n：参数集合中的第一个，即参数“…”里的第一个参数在函数参数总数排在第几
 #else
 sds sdscatprintf(sds s, const char *fmt, ...);
 #endif
@@ -348,6 +363,7 @@ void *sds_malloc(size_t size);
 void *sds_realloc(void *ptr, size_t size);
 void sds_free(void *ptr);
 
+//判断是否为测试环境
 #ifdef REDIS_TEST
 int sdsTest(int argc, char *argv[]);
 #endif
