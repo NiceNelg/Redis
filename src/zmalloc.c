@@ -104,7 +104,9 @@ void zlibc_free(void *ptr) {
 
 //定义在分配和释放内存的时候更新used_memory的值（用到上面内存分配的原子操作add和sub函数）  
 //if结构判断语句中返回的是对_n末两位进行截断的结果：sizeof(long)在32位系统下的二进制表现形式为：100  
-//if结构成立证明当前分配的内存大小有碎片（即_n值不是内存分配单元的整数倍），所以后面有个+=sizeof(long)...的过程就是为了补齐  
+//if结构成立证明当前分配的内存大小有碎片（即_n值不是内存分配单元的整数倍），如:
+//011代表的是7,若_n是8的倍数的话则当_n与001进行与运算时得到的是0
+//所以后面有个+=sizeof(long)...的过程就是为了补齐  
 #define update_zmalloc_stat_alloc(__n) do { \
     size_t _n = (__n); \
     if (_n&(sizeof(long)-1))\
@@ -200,9 +202,12 @@ void *zrealloc(void *ptr, size_t size) {
     update_zmalloc_stat_alloc(zmalloc_size(newptr));
     return newptr;
 #else
+		//获取真正的ptr指针首地址
     realptr = (char*)ptr-PREFIX_SIZE;
     oldsize = *((size_t*)realptr);
+		//根据首地址和新长度重新分配realptr的内存空间 
     newptr = realloc(realptr,size+PREFIX_SIZE);
+		//分配内存空间失败时
     if (!newptr) zmalloc_oom_handler(size);
 
     *((size_t*)newptr) = size;

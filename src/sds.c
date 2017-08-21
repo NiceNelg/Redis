@@ -215,47 +215,70 @@ void sdsclear(sds s) {
  *
  * Note: this does not change the *length* of the sds string as returned
  * by sdslen(), but only the free buffer space we have. */
+
 sds sdsMakeRoomFor(sds s, size_t addlen) {
     void *sh, *newsh;
+		//获取结构体可存字符串剩余长度
     size_t avail = sdsavail(s);
     size_t len, newlen;
     char type, oldtype = s[-1] & SDS_TYPE_MASK;
     int hdrlen;
 
     /* Return ASAP if there is enough space left. */
+		//如果需要增加的长度比剩余长度短则返回原始字符串s
     if (avail >= addlen) return s;
-
+		
+		//保存结构体初始化时设定的长度
     len = sdslen(s);
+		//根据结构体类型获取传入字符串的结构体的初始位置
     sh = (char*)s-sdsHdrSize(oldtype);
+		//保存新增字符串长度
     newlen = (len+addlen);
+		//若字符串的新长度少于1M则增加两倍
     if (newlen < SDS_MAX_PREALLOC)
         newlen *= 2;
     else
+				//如果字符串的新长度大于1M则加1M
         newlen += SDS_MAX_PREALLOC;
 
+		//根据字符串的新长度获取对应结构体
     type = sdsReqType(newlen);
 
     /* Don't use type 5: the user is appending to the string and type 5 is
      * not able to remember empty space, so sdsMakeRoomFor() must be called
      * at every appending operation. */
+		//不要使用类型5结构体：用户添加字符串的长度但是类型5不能记忆剩余空间,所以每次使用增添字符串空间操作时都要使用 
+		//sdsMakeRoomFor()函数
     if (type == SDS_TYPE_5) type = SDS_TYPE_8;
 
+		//获取新结构体类型长度
     hdrlen = sdsHdrSize(type);
+		//如果新结构体类型和旧结构体类型相同时
     if (oldtype==type) {
+				//sh存储的是旧结构体的首地址
         newsh = s_realloc(sh, hdrlen+newlen+1);
+				//分配空间失败时
         if (newsh == NULL) return NULL;
+				//新字符串地址
         s = (char*)newsh+hdrlen;
     } else {
         /* Since the header size changes, need to move the string forward,
          * and can't use realloc */
+				//分配新结构体内存,同时增加用户的使用空间的数值
         newsh = s_malloc(hdrlen+newlen+1);
         if (newsh == NULL) return NULL;
+				//将传入的字符串复制到新结构体的buf
         memcpy((char*)newsh+hdrlen, s, len+1);
-        s_free(sh);
+        //释放旧结构体的空间,同时减去用户的使用空间的数值
+				s_free(sh);
+				//获取新的字符串地址
         s = (char*)newsh+hdrlen;
+				//设置新结构体的flags
         s[-1] = type;
+				//设置新结构体的len值
         sdssetlen(s, len);
     }
+		//设置新结构体的alloc值
     sdssetalloc(s, newlen);
     return s;
 }
