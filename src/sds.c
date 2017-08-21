@@ -215,7 +215,7 @@ void sdsclear(sds s) {
  *
  * Note: this does not change the *length* of the sds string as returned
  * by sdslen(), but only the free buffer space we have. */
-
+//根据传入的字符串指针和增加长度返回新的结构体
 sds sdsMakeRoomFor(sds s, size_t addlen) {
     void *sh, *newsh;
 		//获取结构体可存字符串剩余长度
@@ -289,15 +289,20 @@ sds sdsMakeRoomFor(sds s, size_t addlen) {
  *
  * After the call, the passed sds string is no longer valid and all the
  * references must be substituted with the new pointer returned by the call. */
+//根据字符串的长度重新分配结构体并去掉多余的容量( alloc和len的值一样 )
 sds sdsRemoveFreeSpace(sds s) {
     void *sh, *newsh;
     char type, oldtype = s[-1] & SDS_TYPE_MASK;
     int hdrlen;
+		//获取结构体buf剩余空间
     size_t len = sdslen(s);
+		//获取结构体首地址
     sh = (char*)s-sdsHdrSize(oldtype);
-
+		//根据字符串长度获取对应的结构体的flags
     type = sdsReqType(len);
+		//根据flags获取对应结构体的长度
     hdrlen = sdsHdrSize(type);
+		//如果结构体类型跟旧结构体类型一样
     if (oldtype==type) {
         newsh = s_realloc(sh, hdrlen+len+1);
         if (newsh == NULL) return NULL;
@@ -322,6 +327,7 @@ sds sdsRemoveFreeSpace(sds s) {
  * 3) The free buffer at the end if any.
  * 4) The implicit null term.
  */
+//获取结构体(包括buf的长度)的总大小
 size_t sdsAllocSize(sds s) {
     size_t alloc = sdsalloc(s);
     return sdsHdrSize(s[-1])+alloc+1;
@@ -329,6 +335,7 @@ size_t sdsAllocSize(sds s) {
 
 /* Return the pointer of the actual SDS allocation (normally SDS strings
  * are referenced by the start of the string buffer). */
+//获取结构体指针首地址
 void *sdsAllocPtr(sds s) {
     return (void*) (s-sdsHdrSize(s[-1]));
 }
@@ -356,6 +363,8 @@ void *sdsAllocPtr(sds s) {
  * ... check for nread <= 0 and handle it ...
  * sdsIncrLen(s, nread);
  */
+
+//buf新增内容时的更改结构体len的值
 void sdsIncrLen(sds s, int incr) {
     unsigned char flags = s[-1];
     size_t len;
@@ -363,13 +372,17 @@ void sdsIncrLen(sds s, int incr) {
         case SDS_TYPE_5: {
             unsigned char *fp = ((unsigned char*)s)-1;
             unsigned char oldlen = SDS_TYPE_5_LEN(flags);
+						//如果判断条件为0则设置错误信息
             assert((incr > 0 && oldlen+incr < 32) || (incr < 0 && oldlen >= (unsigned int)(-incr)));
             *fp = SDS_TYPE_5 | ((oldlen+incr) << SDS_TYPE_BITS);
-            len = oldlen+incr;
+            //设置新长度
+						len = oldlen+incr;
             break;
         }
         case SDS_TYPE_8: {
+						//根据类型数字和字符串地址返回结构体首地址并赋值到指针sh
             SDS_HDR_VAR(8,s);
+						//如果可插入的字符串长度大于buf的设置则设置错误信息
             assert((incr >= 0 && sh->alloc-sh->len >= incr) || (incr < 0 && sh->len >= (unsigned int)(-incr)));
             len = (sh->len += incr);
             break;
@@ -402,16 +415,22 @@ void sdsIncrLen(sds s, int incr) {
  *
  * if the specified length is smaller than the current length, no operation
  * is performed. */
-sds sdsgrowzero(sds s, size_t len) {
-    size_t curlen = sdslen(s);
 
+//新增结构体的buf空间
+sds sdsgrowzero(sds s, size_t len) {
+    //获取结构体的buf已使用长度
+		size_t curlen = sdslen(s);
+		//如果传入长度和已使用长度相同则返回s
     if (len <= curlen) return s;
+		//如果不相同则根据字符串s的长度重新设置结构体
     s = sdsMakeRoomFor(s,len-curlen);
     if (s == NULL) return NULL;
 
     /* Make sure added region doesn't contain garbage */
+		//将新增的空间清空
     memset(s+curlen,0,(len-curlen+1)); /* also set trailing \0 byte */
-    sdssetlen(s, len);
+    //初始化新的结构体
+		sdssetlen(s, len);
     return s;
 }
 
