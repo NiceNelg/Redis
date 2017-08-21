@@ -439,21 +439,28 @@ sds sdsgrowzero(sds s, size_t len) {
  *
  * After the call, the passed sds string is no longer valid and all the
  * references must be substituted with the new pointer returned by the call. */
-sds sdscatlen(sds s, const void *t, size_t len) {
-    size_t curlen = sdslen(s);
 
-    s = sdsMakeRoomFor(s,len);
-    if (s == NULL) return NULL;
-    memcpy(s+curlen, t, len);
-    sdssetlen(s, curlen+len);
-    s[curlen+len] = '\0';
-    return s;
+//翻译以上注释,通过t指针和形参len增加安全的二进制字符串到字符串s的结尾,返回新的结构体类型
+sds sdscatlen(sds s, const void *t, size_t len) {
+  //获取当前字符串长度  
+	size_t curlen = sdslen(s);
+	
+	s = sdsMakeRoomFor(s,len);
+  if (s == NULL) return NULL;
+	//从字符串s的结尾加上t字符串
+  memcpy(s+curlen, t, len);
+	//更新结构体len值
+  sdssetlen(s, curlen+len);
+  s[curlen+len] = '\0';
+  return s;
 }
 
 /* Append the specified null termianted C string to the sds string 's'.
  *
  * After the call, the passed sds string is no longer valid and all the
  * references must be substituted with the new pointer returned by the call. */
+
+//包装sdscatlen函数
 sds sdscat(sds s, const char *t) {
     return sdscatlen(s, t, strlen(t));
 }
@@ -462,17 +469,23 @@ sds sdscat(sds s, const char *t) {
  *
  * After the call, the modified sds string is no longer valid and all the
  * references must be substituted with the new pointer returned by the call. */
+
+//包装sdscatlen函数
 sds sdscatsds(sds s, const sds t) {
     return sdscatlen(s, t, sdslen(t));
 }
 
 /* Destructively modify the sds string 's' to hold the specified binary
  * safe string pointed by 't' of length 'len' bytes. */
+//复制字符串到s
 sds sdscpylen(sds s, const char *t, size_t len) {
-    if (sdsalloc(s) < len) {
+    //如果s字符串的总容量比len少
+		if (sdsalloc(s) < len) {
+				//增加字符串s的总容量
         s = sdsMakeRoomFor(s,len-sdslen(s));
         if (s == NULL) return NULL;
     }
+		//复制字符串t到s
     memcpy(s, t, len);
     s[len] = '\0';
     sdssetlen(s, len);
@@ -481,6 +494,8 @@ sds sdscpylen(sds s, const char *t, size_t len) {
 
 /* Like sdscpylen() but 't' must be a null-termined string so that the length
  * of the string is obtained with strlen(). */
+
+//包装sdscpy函数
 sds sdscpy(sds s, const char *t) {
     return sdscpylen(s, t, strlen(t));
 }
