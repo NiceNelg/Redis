@@ -514,19 +514,32 @@ int sdsll2str(char *s, long long value) {
 
     /* Generate the string representation, this method produces
      * an reversed string. */
-    v = (value < 0) ? -value : value;
-    p = s;
+    //判断value是否为负数
+		v = (value < 0) ? -value : value;
+    //使指针p的首地址跟指针s的首地址相等
+		p = s;
+		//将长整型类型数据转换成字符串,原理:
+		//如vaule = -123456 则 v = 123456
+		//v%10 = 6
+		//*p = 6 
+		//v/10 = 12345
+		//循环至最大的位数,注:当1/10的时候 因为v定义为整型 因此 1/10 = 0
+		//最后得出 *p = 654321
     do {
         *p++ = '0'+(v%10);
         v /= 10;
     } while(v);
+		//如果value为负数,则*p最后等于*p = 654321-
     if (value < 0) *p++ = '-';
 
     /* Compute length and add null term. */
+		//获取s字符串的首地址
     l = p-s;
+		//*p = 654321-\0
     *p = '\0';
 
     /* Reverse the string. */
+		//反转字符串*p
     p--;
     while(s < p) {
         aux = *s;
@@ -535,6 +548,7 @@ int sdsll2str(char *s, long long value) {
         s++;
         p--;
     }
+		//返回s字符串的首地址
     return l;
 }
 
