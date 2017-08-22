@@ -844,10 +844,13 @@ sds sdstrim(sds s, const char *cset) {
  * s = sdsnew("Hello World");
  * sdsrange(s,1,-1); => "ello World"
  */
+
+//根据传入的首尾长度截取字符串,并调整结构体
 void sdsrange(sds s, int start, int end) {
     size_t newlen, len = sdslen(s);
 
     if (len == 0) return;
+		//如果传入的是负数则从尾开始截取字符串
     if (start < 0) {
         start = len+start;
         if (start < 0) start = 0;
@@ -856,8 +859,12 @@ void sdsrange(sds s, int start, int end) {
         end = len+end;
         if (end < 0) end = 0;
     }
+		//判断截取的长度是否小于0
     newlen = (start > end) ? 0 : (end-start)+1;
+
     if (newlen != 0) {
+				//( signed )与unsigned相反 表示此数字是有符号的
+				//如果首长度大于字符串s的长度则新长度为0
         if (start >= (signed)len) {
             newlen = 0;
         } else if (end >= (signed)len) {
@@ -867,6 +874,7 @@ void sdsrange(sds s, int start, int end) {
     } else {
         start = 0;
     }
+		//截取字符串
     if (start && newlen) memmove(s, s+start, newlen);
     s[newlen] = 0;
     sdssetlen(s,newlen);
@@ -880,6 +888,8 @@ void sdstolower(sds s) {
 }
 
 /* Apply toupper() to every character of the sds string 's'. */
+
+//字符串全部转成小写
 void sdstoupper(sds s) {
     int len = sdslen(s), j;
 
@@ -897,12 +907,15 @@ void sdstoupper(sds s) {
  * If two strings share exactly the same prefix, but one of the two has
  * additional characters, the longer string is considered to be greater than
  * the smaller one. */
+
+//比较字符串,相同是返回两个字符串的长度差
 int sdscmp(const sds s1, const sds s2) {
     size_t l1, l2, minlen;
     int cmp;
 
     l1 = sdslen(s1);
     l2 = sdslen(s2);
+		//获取字符串s1,s2的长度获取可比较长度
     minlen = (l1 < l2) ? l1 : l2;
     cmp = memcmp(s1,s2,minlen);
     if (cmp == 0) return l1-l2;
@@ -925,12 +938,24 @@ int sdscmp(const sds s1, const sds s2) {
  * requires length arguments. sdssplit() is just the
  * same function but for zero-terminated strings.
  */
+
+//对给定的字符串s按照给定的sep分隔字符串来进行切割
 sds *sdssplitlen(const char *s, int len, const char *sep, int seplen, int *count) {
     int elements = 0, slots = 5, start = 0, j;
-    sds *tokens;
+    //定义二级指针tokens
+		//定义二级指针的意义是使用一个数组存储分割后的每个字符串,如: abc def ghi 以空格分割,每个tokens元素存储一个分割后的字符串,即:
+		//tokens[0] = "abc" tokens[1] = "def" tokens[2] = "ghi"
+		//因为存储的是字符串,因此tokens相当于一个二维数组,如:
+		//tokens[0][0] = 'a' tokens[0][1] = 'b' tokens[0][2] = 'c'
+		//为何不直接定义一个二维数组,因为每个字符串分割的数量不一样 因此要定义一个不确定长度的二维数组,即tokens[m][n]
+		sds *tokens;
 
     if (seplen < 1 || len < 0) return NULL;
-
+		
+		//分配二级指针tokens内存空间
+		//表明先分配一个tokens[5][n]的二维数组,当赋值的时候就可以直接使用tokens[0] = "字符串"
+		//使用二级指针为二维数组分配空间时注意的是tokens代表的是多维数组的第一维数组的首地址
+		//因此分配空间的时候使用的格式为 malloc( sizeof( 第二维数组的类型 ) * m )
     tokens = s_malloc(sizeof(sds)*slots);
     if (tokens == NULL) return NULL;
 
@@ -939,33 +964,44 @@ sds *sdssplitlen(const char *s, int len, const char *sep, int seplen, int *count
         return tokens;
     }
     for (j = 0; j < (len-(seplen-1)); j++) {
-        /* make sure there is room for the next element and the final one */
+        /* make sure there is room for the next element and the final one */			
+				//确保有下一个元素和最后一个元素的内存空间
         if (slots < elements+2) {
+						//定义二级指针
             sds *newtokens;
-
+						//分配两倍slots的内存空间
             slots *= 2;
             newtokens = s_realloc(tokens,sizeof(sds)*slots);
             if (newtokens == NULL) goto cleanup;
             tokens = newtokens;
         }
         /* search the separator */
+				//查找需要分割的地方,第一个判断条件是当分割符只有一个符号的时候,第二个判断条件是当分隔符是一个字符串的时候
+				//由于j的最大值等于字符串s的长度-分隔符的长度,因此s+j等于逐个字符偏移
         if ((seplen == 1 && *(s+j) == sep[0]) || (memcmp(s+j,sep,seplen) == 0)) {
+						//当发现分割字符后将分割字符前的字符储存起来,使用sdsdhr结构体
             tokens[elements] = sdsnewlen(s+start,j-start);
+						//当tokens[elements]等于null时表示系统的内存已经使用完,释放tokens的内存空间
             if (tokens[elements] == NULL) goto cleanup;
             elements++;
+						//下次字符串保存开始地址位s+start,所以start = 当前已偏移的字符地址+分割符位置( 跳过当前分隔符位置 )
             start = j+seplen;
+						//跳过当前分隔符位置
             j = j+seplen-1; /* skip the separator */
         }
     }
     /* Add the final element. We are sure there is room in the tokens array. */
+		//添加最后一个分割元素
     tokens[elements] = sdsnewlen(s+start,len-start);
     if (tokens[elements] == NULL) goto cleanup;
     elements++;
+		//统计元素的个数
     *count = elements;
     return tokens;
 
 cleanup:
     {
+				//二级指针内存空间释放,先从最低维开始释放,然后释放二级指针的内存空间
         int i;
         for (i = 0; i < elements; i++) sdsfree(tokens[i]);
         s_free(tokens);
