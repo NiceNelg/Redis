@@ -444,7 +444,7 @@ sds sdsgrowzero(sds s, size_t len) {
 sds sdscatlen(sds s, const void *t, size_t len) {
   //获取当前字符串长度  
 	size_t curlen = sdslen(s);
-	
+	//插入字符串,返回合适的结构体类型
 	s = sdsMakeRoomFor(s,len);
   if (s == NULL) return NULL;
 	//从字符串s的结尾加上t字符串
@@ -553,6 +553,7 @@ int sdsll2str(char *s, long long value) {
 }
 
 /* Identical sdsll2str(), but for unsigned long long type. */
+//如上,没有负数处理
 int sdsull2str(char *s, unsigned long long v) {
     char *p, aux;
     size_t l;
@@ -585,6 +586,7 @@ int sdsull2str(char *s, unsigned long long v) {
  *
  * sdscatprintf(sdsempty(),"%lld\n", value);
  */
+//包装函数
 sds sdsfromlonglong(long long value) {
     char buf[SDS_LLSTR_SIZE];
     int len = sdsll2str(buf,value);
@@ -593,14 +595,17 @@ sds sdsfromlonglong(long long value) {
 }
 
 /* Like sdscatprintf() but gets va_list instead of being variadic. */
+//将格式化输出的参数连接到字符串s后面
 sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
     va_list cpy;
     char staticbuf[1024], *buf = staticbuf, *t;
-    size_t buflen = strlen(fmt)*2;
+    //计算字符串fmt的长度,并乘于2
+		size_t buflen = strlen(fmt)*2;
 
     /* We try to start using a static buffer for speed.
      * If not possible we revert to heap allocation. */
-    if (buflen > sizeof(staticbuf)) {
+    // 如果fmt长度的两倍小于1024，则直接使用定义好的缓冲区staticbuf，否则在堆上分配一个新的缓冲区空间
+		if (buflen > sizeof(staticbuf)) {
         buf = s_malloc(buflen);
         if (buf == NULL) return NULL;
     } else {
@@ -610,10 +615,15 @@ sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
     /* Try with buffers two times bigger every time we fail to
      * fit the string in the current buffer size. */
     while(1) {
+				// 给缓冲区的倒数第二位打一个结束符标记
         buf[buflen-2] = '\0';
+				//复制可变参数列表ap到cpy( va_list是只可变参数类型 ),与va_start( )函数的区别是ap参数位置应该改成fmt
         va_copy(cpy,ap);
+				// 格式化输出到缓冲区中
         vsnprintf(buf, buflen, fmt, cpy);
+				//清空可变参数cpy列表并释放cpy空间
         va_end(cpy);
+				// 如果先前打的标记被覆盖，说明缓冲区还是小了，将缓冲区扩大两倍继续尝试
         if (buf[buflen-2] != '\0') {
             if (buf != staticbuf) s_free(buf);
             buflen *= 2;
@@ -625,6 +635,7 @@ sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
     }
 
     /* Finally concat the obtained string to the SDS string and return it. */
+		// 最后将格式化输出的字符串连接到源字符串s尾部
     t = sdscat(s, buf);
     if (buf != staticbuf) s_free(buf);
     return t;
@@ -646,6 +657,7 @@ sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
  *
  * s = sdscatprintf(sdsempty(), "... your format ...", args);
  */
+//包装上个函数
 sds sdscatprintf(sds s, const char *fmt, ...) {
     va_list ap;
     char *t;
@@ -671,6 +683,7 @@ sds sdscatprintf(sds s, const char *fmt, ...) {
  * %U - 64 bit unsigned integer (unsigned long long, uint64_t)
  * %% - Verbatim "%" character.
  */
+//将格式化字符串追加到结构体的buf的最后
 sds sdscatfmt(sds s, char const *fmt, ...) {
     size_t initlen = sdslen(s);
     const char *f = fmt;
@@ -680,6 +693,7 @@ sds sdscatfmt(sds s, char const *fmt, ...) {
     va_start(ap,fmt);
     f = fmt;    /* Next format specifier byte to process. */
     i = initlen; /* Position of the next byte to write to dest str. */
+		//循环至格式字符串fmt的结尾
     while(*f) {
         char next, *str;
         size_t l;
@@ -687,6 +701,7 @@ sds sdscatfmt(sds s, char const *fmt, ...) {
         unsigned long long unum;
 
         /* Make sure there is always space for at least 1 char. */
+				//保证结构体buf容量至少剩余1
         if (sdsavail(s)==0) {
             s = sdsMakeRoomFor(s,1);
         }
@@ -696,25 +711,35 @@ sds sdscatfmt(sds s, char const *fmt, ...) {
             next = *(f+1);
             f++;
             switch(next) {
+						//case 's': 后面没有break;语句表示在break;之前符合case语句都执行,即判断条件等价于 's' || 'S'
             case 's':
             case 'S':
+								//返回ap指针当前首地址指向的首地址,char *指定返回类型
                 str = va_arg(ap,char*);
+								//如果next = 's'表示是正常的字符串, 如果是'S'表示字符串是sdshdr类型结构体的buf
                 l = (next == 's') ? strlen(str) : sdslen(str);
+								//如果剩余容量小于变量则增加容量
                 if (sdsavail(s) < l) {
                     s = sdsMakeRoomFor(s,l);
                 }
+								//从结构体的buf最后追加字符串
                 memcpy(s+i,str,l);
+								//修改结构体的len
                 sdsinclen(s,l);
+								//记录结构体buf的最高地址
                 i += l;
                 break;
             case 'i':
             case 'I':
+								// 'i'代表整型 'I'代表长整型
                 if (next == 'i')
                     num = va_arg(ap,int);
                 else
                     num = va_arg(ap,long long);
+
                 {
                     char buf[SDS_LLSTR_SIZE];
+										//将长整型转换成字符串
                     l = sdsll2str(buf,num);
                     if (sdsavail(s) < l) {
                         s = sdsMakeRoomFor(s,l);
@@ -769,23 +794,36 @@ sds sdscatfmt(sds s, char const *fmt, ...) {
  *
  * Example:
  *
- * s = sdsnew("AA...AA.a.aa.aHelloWorld     :::");
+ * s = sdsnew("AA...AA.a.aa.aHello World     :::");
  * s = sdstrim(s,"Aa. :");
  * printf("%s\n", s);
  *
  * Output will be just "Hello World".
  */
+
+//筛选字符串,可筛选掉字符串s头尾含有cset字符串中的字符( 但不包括中间的 ),如
+//s = sdsnew( "AA...AA.a.aa.aHello World     :::");
+//s = sdstrim( s,"Aa. :");
+//printf( "%s\n", s);
+//输出: "Hello World"
 sds sdstrim(sds s, const char *cset) {
     char *start, *end, *sp, *ep;
     size_t len;
-
+		
+		//保存字符串s的首地址
     sp = start = s;
+		//保存字符串s的最高地址
     ep = end = s+sdslen(s)-1;
+		//从头逐个筛选字符串s的字符,如此字符包含在cset字符串中则匹配下一个字符,直到首个不包含在字符串cset中的字符
     while(sp <= end && strchr(cset, *sp)) sp++;
+		//从尾逐个筛选字符串s的字符,如此字符包含在cset字符串中则匹配上一个字符,直到首个不包含在字符串cset中的字符
     while(ep > sp && strchr(cset, *ep)) ep--;
+		//计算筛选后的字符串长度
     len = (sp > ep) ? 0 : ((ep-sp)+1);
+		//将筛选后的字符串sp复制到字符串s中,由于sp指针和s指针的内存空间有重叠的地方,因此使用memmove函数,与memcpy函数类似
     if (s != sp) memmove(s, sp, len);
     s[len] = '\0';
+		//重新设置结构体
     sdssetlen(s,len);
     return s;
 }
