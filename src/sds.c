@@ -1323,6 +1323,8 @@ void sds_free(void *ptr) { s_free(ptr); }
 #include "limits.h"
 
 #define UNUSED(x) (void)(x)
+
+//测试函数
 int sdsTest(void) {
     {
         sds x = sdsnew("foo"), y;
@@ -1488,6 +1490,7 @@ int sdsTest(void) {
 #endif
 
 #ifdef SDS_TEST_MAIN
+//当想测试sds文件时可以这个c文件为main编译,测试内容可在上面的sdsText函数中添加
 int main(void) {
     return sdsTest();
 }
