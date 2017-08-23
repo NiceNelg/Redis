@@ -16,13 +16,13 @@
 
 源码阅读顺序推荐( 由上至下按文件名顺序 )：
 
-zmalloc.h
-zmalloc.c
+* zmalloc.h
+* zmalloc.c
 
-sdsalloc.h
-sds.h
-texthelp.h
-sds.c
+* sdsalloc.h
+* sds.h
+* texthelp.h
+* sds.c
 
 --------------------------------------------------------------------------------------------------------------
 
