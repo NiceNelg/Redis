@@ -8,7 +8,7 @@
 
 此分享阅读的是Redis的3.2.5版本，获取地址：wget http://download.redis.io/releases/redis-3.2.5.tar.gz
 
-此分享供学习交流,禁止商业使用，转载请注明出处:https://github.com/NiceNelg/Redis.git
+此分享仅供学习交流，禁止商业使用，转载请注明出处:https://github.com/NiceNelg/Redis.git
 
 --------------------------------------------------------------------------------------------------------------
 
