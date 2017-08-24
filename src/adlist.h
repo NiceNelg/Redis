@@ -35,7 +35,7 @@
 
 //定义双向列表的结构体listNode
 typedef struct listNode {
-    struct listNode *prev;	//前序节点
+    struct listNode *prev;	//前序节点( 注意数据类型为结构体本身 )
     struct listNode *next;	//后继节点
     void *value;						//节点值( 数据类型为空指针 )
 } listNode;
@@ -53,7 +53,7 @@ typedef struct list {
     void *(*dup)(void *ptr);//定义函数指针( 复制ptr内容 )
     void (*free)(void *ptr);//定义函数指针( 释放ptr内容 )
     int (*match)(void *ptr, void *key);	//定义函数指针( 匹配ptr和key内容的函数 )
-    unsigned long len;
+    unsigned long len;			//节点个数
 } list;
 
 /* Functions implemented as macros */
