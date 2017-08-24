@@ -57,6 +57,7 @@ typedef struct list {
 } list;
 
 /* Functions implemented as macros */
+//没什么特别的宏定义,应该都能看懂吧
 #define listLength(l) ((l)->len)
 #define listFirst(l) ((l)->head)
 #define listLast(l) ((l)->tail)
