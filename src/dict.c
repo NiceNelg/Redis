@@ -55,10 +55,20 @@
  * Note that even when dict_can_resize is set to 0, not all resizes are
  * prevented: a hash table is still allowed to grow if the ratio between
  * the number of elements and the buckets > dict_force_resize_ratio. */
+
+/*
+ * 通过dictEnableResize() / dictDisableResize()方法我们可以启用/禁用ht空间重新分配.  
+ * 这对于Redis来说很重要, 因为我们用的是写时复制机制而且不想在子进程执行保存操作时移动过多的内存. 
+ * 
+ * 需要注意的是，即使dict_can_resize设置为0, 并不意味着所有的resize操作都被禁止: 
+ * 一个a hash table仍然可以拓展空间，如果bucket与element之间的比例  > dict_force_resize_ratio。 
+ */ 
 static int dict_can_resize = 1;
 static unsigned int dict_force_resize_ratio = 5;
 
 /* -------------------------- private prototypes ---------------------------- */
+
+/* -------------------------- 私有函数,只能在本文件使用 ---------------------------- */
 
 static int _dictExpandIfNeeded(dict *ht);
 static unsigned long _dictNextPower(unsigned long size);
@@ -67,9 +77,11 @@ static int _dictInit(dict *ht, dictType *type, void *privDataPtr);
 
 /* -------------------------- hash functions -------------------------------- */
 
+/* -------------------------- 实现哈希算法的函数 -------------------------------- */
+
 /* Thomas Wang's 32 bit Mix Function */
-unsigned int dictIntHashFunction(unsigned int key)
-{
+//哈希加密
+unsigned int dictIntHashFunction(unsigned int key) {
     key += ~(key << 15);
     key ^=  (key >> 10);
     key +=  (key << 3);
@@ -79,12 +91,16 @@ unsigned int dictIntHashFunction(unsigned int key)
     return key;
 }
 
+//unint32_t代表4字节数据
+//使用整型keys来标识hash方法
 static uint32_t dict_hash_function_seed = 5381;
 
+//设置dict_hash_function_seed
 void dictSetHashFunctionSeed(uint32_t seed) {
     dict_hash_function_seed = seed;
 }
 
+//获取dict_hash_function_seed
 uint32_t dictGetHashFunctionSeed(void) {
     return dict_hash_function_seed;
 }
@@ -100,6 +116,8 @@ uint32_t dictGetHashFunctionSeed(void) {
  * 2. It will not produce the same results on little-endian and big-endian
  *    machines.
  */
+
+//MurmurHash2哈希算法的实现，根据key值和指定长度进行哈希
 unsigned int dictGenHashFunction(const void *key, int len) {
     /* 'm' and 'r' are mixing constants generated offline.
      They're not really 'magic', they just happen to work well.  */
@@ -144,6 +162,8 @@ unsigned int dictGenHashFunction(const void *key, int len) {
 }
 
 /* And a case insensitive hash function (based on djb hash) */
+
+//一种比较简单的哈希算法，也是对字符串进行哈希的
 unsigned int dictGenCaseHashFunction(const unsigned char *buf, int len) {
     unsigned int hash = (unsigned int)dict_hash_function_seed;
 
@@ -156,8 +176,9 @@ unsigned int dictGenCaseHashFunction(const unsigned char *buf, int len) {
 
 /* Reset a hash table already initialized with ht_init().
  * NOTE: This function should only be called by ht_destroy(). */
-static void _dictReset(dictht *ht)
-{
+
+//私有方法，重置哈希表，参数是dictht哈希表结构
+static void _dictReset(dictht *ht) {
     ht->table = NULL;
     ht->size = 0;
     ht->sizemask = 0;
@@ -165,36 +186,40 @@ static void _dictReset(dictht *ht)
 }
 
 /* Create a new hash table */
-dict *dictCreate(dictType *type,
-        void *privDataPtr)
-{
-    dict *d = zmalloc(sizeof(*d));
-
+//创建一个新的字典dict
+dict *dictCreate(dictType *type, void *privDataPtr) {
+    //分配内存
+		dict *d = zmalloc(sizeof(*d));
+		//初始化字典
     _dictInit(d,type,privDataPtr);
     return d;
 }
 
 /* Initialize the hash table */
-int _dictInit(dict *d, dictType *type,
-        void *privDataPtr)
-{
-    _dictReset(&d->ht[0]);
+//初始化字典
+int _dictInit(dict *d, dictType *type, void *privDataPtr) {
+    //这里的参数应该这样看&( d->ht[0] )
+		_dictReset(&d->ht[0]);
     _dictReset(&d->ht[1]);
     d->type = type;
+		//加上额外存储的信息
     d->privdata = privDataPtr;
+		//表示数据动态迁移的进行位置， 为-1时说明没有进行rehash
     d->rehashidx = -1;
-    d->iterators = 0;
+    //当前存在的迭代器dictIterator的数量
+		d->iterators = 0;
     return DICT_OK;
 }
 
 /* Resize the table to the minimal size that contains all the elements,
  * but with the invariant of a USED/BUCKETS ratio near to <= 1 */
-int dictResize(dict *d)
-{
-    int minimal;
 
+int dictResize(dict *d) {
+    int minimal;
+		//当不允许重置或者字典的迭代器不等于-1的时候不能重置字典
     if (!dict_can_resize || dictIsRehashing(d)) return DICT_ERR;
-    minimal = d->ht[0].used;
+    //获取已有值的table项的数量
+		minimal = d->ht[0].used;
     if (minimal < DICT_HT_INITIAL_SIZE)
         minimal = DICT_HT_INITIAL_SIZE;
     return dictExpand(d, minimal);
