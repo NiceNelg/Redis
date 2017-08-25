@@ -27,6 +27,9 @@
 * adlist.h
 * adlist.c
 
+* dict.h
+* dict.c( 这个模块的代码顺序挺乱的 建议参考http://huangz.iteye.com/blog/1455808 此文章的介绍函数顺序查看, 同时感谢http://blog.csdn.net/xiejingfa/article/details/51018337文章,大部分注释都是那里的,汗-.-,函数定义顺序实在太乱了 注:在哈希节点结构体dictEntry中的next成员一直为NULL值 )
+
 --------------------------------------------------------------------------------------------------------------
 
 This README is just a fast *quick start* document. You can find more detailed documentation at http://redis.io.
