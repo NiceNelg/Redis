@@ -44,12 +44,13 @@
 /* Unused arguments generate annoying warnings... */
 #define DICT_NOTUSED(V) ((void) V)
 
+//哈希节点
 typedef struct dictEntry {
     void *key;				// 键
     union {						//联合体 代表引用v成员的时候其他也赋予一样的值 如:v.u64 = 1; 代表 *val = 1, s64 = 1 ...
         void *val;		//空指针类型
-        uint64_t u64;	//代表8字节数据
-        int64_t s64;	//代表64位整型数据 ( long long )
+        uint64_t u64;	//64位unsigned整型
+        int64_t s64;	//64位signed整型 ( long long )
         double d;			//代表浮点型数据
     } v;
     struct dictEntry *next;	// 指向下一个哈希节点( 形成链表 )
@@ -68,7 +69,7 @@ typedef struct dictType {
 /* This is our hash table structure. Every dictionary has two of this as we
  * implement incremental rehashing, for the old to the new table. */
 
-//hash表的结构体
+//哈希链表
 typedef struct dictht {
     dictEntry **table;			// 节点指针数组
     unsigned long size;			// 桶的数量
@@ -76,7 +77,7 @@ typedef struct dictht {
     unsigned long used;			// 已有节点数量
 } dictht;
 
-//字典结构体
+//字典
 typedef struct dict {
     dictType *type;	//为哈希表中不同类型的值所使用的一族函数
     void *privdata;	
