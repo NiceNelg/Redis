@@ -141,8 +141,11 @@
 #define ZIP_IS_STR(enc) (((enc) & ZIP_STR_MASK) < ZIP_STR_MASK)
 
 /* Utility macros */
+ //操作ziplist结构体
 #define ZIPLIST_BYTES(zl)       (*((uint32_t*)(zl)))
+//将ziplist跳过4字节
 #define ZIPLIST_TAIL_OFFSET(zl) (*((uint32_t*)((zl)+sizeof(uint32_t))))
+//将ziplist跳过8字节
 #define ZIPLIST_LENGTH(zl)      (*((uint16_t*)((zl)+sizeof(uint32_t)*2)))
 #define ZIPLIST_HEADER_SIZE     (sizeof(uint32_t)*2+sizeof(uint16_t))
 #define ZIPLIST_END_SIZE        (sizeof(uint8_t))
@@ -157,7 +160,7 @@
         ZIPLIST_LENGTH(zl) = intrev16ifbe(intrev16ifbe(ZIPLIST_LENGTH(zl))+incr); \
 }
 
-//压缩链表结构体
+//ziplist表的节点结构体
 typedef struct zlentry {
 		//prevrawlensize为存储上一个链表节点的长度数值所需要的字节数
 		//prevrawlen为上一个链表节点占用的长度
@@ -173,6 +176,7 @@ typedef struct zlentry {
     unsigned char *p;
 } zlentry;
 
+//将ziplist的节点置0
 #define ZIPLIST_ENTRY_ZERO(zle) { \
     (zle)->prevrawlensize = (zle)->prevrawlen = 0; \
     (zle)->lensize = (zle)->len = (zle)->headersize = 0; \
@@ -250,7 +254,7 @@ static unsigned int zipEncodeLength(unsigned char *p, unsigned char encoding, un
  * entries length. */
 //从ptr指向的字符串中取出链表节点的编码、保存节点长度所需要的字节数、节点长度，并分别保存在encoding、lensize、len3个变量中
 #define ZIP_DECODE_LENGTH(ptr, encoding, lensize, len) do {                    \
-    ZIP_ENTRY_ENCODING((ptr), (encoding));                                     \
+		ZIP_ENTRY_ENCODING((ptr), (encoding));                                     \
     if ((encoding) < ZIP_STR_MASK) {                                           \
         if ((encoding) == ZIP_STR_06B) {                                       \
             (lensize) = 1;                                                     \
@@ -275,14 +279,18 @@ static unsigned int zipEncodeLength(unsigned char *p, unsigned char encoding, un
 
 /* Encode the length of the previous entry and write it to "p". Return the
  * number of bytes needed to encode this length if "p" is NULL. */
+//将链表中上一个节点的长度值编码放入p指针指向的缓冲区中，返回编码后所占有的字节数
 static unsigned int zipPrevEncodeLength(unsigned char *p, unsigned int len) {
     if (p == NULL) {
         return (len < ZIP_BIGLEN) ? 1 : sizeof(len)+1;
     } else {
         if (len < ZIP_BIGLEN) {
+						//如果上一个节点的长度值小于254，只需要用一个字节表示即可
             p[0] = len;
             return 1;
         } else {
+						//当长度值大于或等于254时使用5个字节存储，第1个字节的数值为254
+						//表示上一个节点的长度值大于等于254,接下来的4个字节才是真正的长度
             p[0] = ZIP_BIGLEN;
             memcpy(p+1,&len,sizeof(len));
             memrev32ifbe(p+1);
@@ -439,10 +447,18 @@ static void zipEntry(unsigned char *p, zlentry *e) {
 }
 
 /* Create a new empty ziplist. */
+//创建新的ziplist
 unsigned char *ziplistNew(void) {
+		//初始大小( 8字节+2字节+1字节 )
+		//zlbytes：4字节，记录整个压缩列表占用内存的字节数
+		//zltail：4字节，记录压缩列表尾部节点距离起始地址的偏移量
+		//zllen：2字节，记录压缩列表包含的节点数量
+		//zlend：1字节，特殊值0xFF，标记压缩列表的结束
     unsigned int bytes = ZIPLIST_HEADER_SIZE+1;
     unsigned char *zl = zmalloc(bytes);
+		//记录zlbytes的大小为13字节( 没有节点 )
     ZIPLIST_BYTES(zl) = intrev32ifbe(bytes);
+		//将ziplist表移动到zltail字段起始位并赋值
     ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe(ZIPLIST_HEADER_SIZE);
     ZIPLIST_LENGTH(zl) = 0;
     zl[bytes-1] = ZIP_END;
