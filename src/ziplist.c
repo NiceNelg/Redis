@@ -349,9 +349,9 @@ static int zipPrevLenByteDiff(unsigned char *p, unsigned int len) {
 /* Return the total number of bytes used by the entry pointed to by 'p'. */
 static unsigned int zipRawEntryLength(unsigned char *p) {
     unsigned int prevlensize, encoding, lensize, len;
-		//根据传入节点位置获取上一个节点的占用的长度并返回给prevlensize变量
+		//根据传入节点位置获取存储上一个链表节点的长度数值所需要的字节数并返回给prevlensize变量
     ZIP_DECODE_PREVLENSIZE(p, prevlensize);
-		//获取上一个节点的长度
+		//获取本节点的长度( 不包括存储上一个链表节点的长度数值所需要的字节数的长度 )
     ZIP_DECODE_LENGTH(p + prevlensize, encoding, lensize, len);
     return prevlensize + lensize + len;
 }
