@@ -458,14 +458,18 @@ unsigned char *ziplistNew(void) {
     unsigned char *zl = zmalloc(bytes);
 		//记录zlbytes的大小为13字节( 没有节点 )
     ZIPLIST_BYTES(zl) = intrev32ifbe(bytes);
-		//将ziplist表移动到zltail字段起始位并赋值
+		//将ziplist表移动到zltail字段起始位并赋值( 因为还没有添加节点 因此压缩列表尾部距离起始地址的偏移量有10字节 )
+		//intrev32ifbe intrev16ifbe函数暂时不知道有什么用 根据宏定义暂时当它返回的是传入的值
     ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe(ZIPLIST_HEADER_SIZE);
+		//将ziplist表的zllen字典记录为0
     ZIPLIST_LENGTH(zl) = 0;
+		//将zlend的标记打上
     zl[bytes-1] = ZIP_END;
     return zl;
 }
 
 /* Resize the ziplist. */
+//重置ziplist,不释放内存空间
 static unsigned char *ziplistResize(unsigned char *zl, unsigned int len) {
     zl = zrealloc(zl,len);
     ZIPLIST_BYTES(zl) = intrev32ifbe(len);
