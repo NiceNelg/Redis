@@ -55,13 +55,16 @@
 static int zslLexValueGteMin(robj *value, zlexrangespec *spec);
 static int zslLexValueLteMax(robj *value, zlexrangespec *spec);
 
+//创建跳跃表节点
 zskiplistNode *zslCreateNode(int level, double score, robj *obj) {
-    zskiplistNode *zn = zmalloc(sizeof(*zn)+level*sizeof(struct zskiplistLevel));
+    //level是一个柔性数组,存储的是一个结构体
+		zskiplistNode *zn = zmalloc(sizeof(*zn)+level*sizeof(struct zskiplistLevel));
     zn->score = score;
     zn->obj = obj;
     return zn;
 }
 
+//创建跳跃表
 zskiplist *zslCreate(void) {
     int j;
     zskiplist *zsl;
@@ -79,11 +82,13 @@ zskiplist *zslCreate(void) {
     return zsl;
 }
 
+//销毁跳跃链表节点
 void zslFreeNode(zskiplistNode *node) {
     decrRefCount(node->obj);
     zfree(node);
 }
 
+//销毁跳跃链表
 void zslFree(zskiplist *zsl) {
     zskiplistNode *node = zsl->header->level[0].forward, *next;
 
@@ -100,6 +105,7 @@ void zslFree(zskiplist *zsl) {
  * The return value of this function is between 1 and ZSKIPLIST_MAXLEVEL
  * (both inclusive), with a powerlaw-alike distribution where higher
  * levels are less likely to be returned. */
+//返回随机level值
 int zslRandomLevel(void) {
     int level = 1;
     while ((random()&0xFFFF) < (ZSKIPLIST_P * 0xFFFF))
@@ -117,10 +123,8 @@ zskiplistNode *zslInsert(zskiplist *zsl, double score, robj *obj) {
     for (i = zsl->level-1; i >= 0; i--) {
         /* store rank that is crossed to reach the insert position */
         rank[i] = i == (zsl->level-1) ? 0 : rank[i+1];
-        while (x->level[i].forward &&
-            (x->level[i].forward->score < score ||
-                (x->level[i].forward->score == score &&
-                compareStringObjects(x->level[i].forward->obj,obj) < 0))) {
+        while (x->level[i].forward && (x->level[i].forward->score < score || (x->level[i].forward->score == score &&
+												compareStringObjects(x->level[i].forward->obj,obj) < 0))) {
             rank[i] += x->level[i].span;
             x = x->level[i].forward;
         }

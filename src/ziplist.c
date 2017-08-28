@@ -112,16 +112,17 @@
 #include "endianconv.h"
 #include "redisassert.h"
 
-#define ZIP_END 255
-#define ZIP_BIGLEN 254
+#define ZIP_END 255			//ziplist结束标识
+#define ZIP_BIGLEN 254	//ziplist节点头部第一部分需要使用到的开始标识，当上一个节点长度值大于或等于254时使用5个字节存储
 
 /* Different encoding/length possibilities */
-#define ZIP_STR_MASK 0xc0
-#define ZIP_INT_MASK 0x30
-#define ZIP_STR_06B (0 << 6)
+//所有编码方式汇总
+#define ZIP_STR_MASK 0xc0						//字符串编码
+#define ZIP_INT_MASK 0x30						//整型编码
+#define ZIP_STR_06B (0 << 6)				
 #define ZIP_STR_14B (1 << 6)
 #define ZIP_STR_32B (2 << 6)
-#define ZIP_INT_16B (0xc0 | 0<<4)
+#define ZIP_INT_16B (0xc0 | 0<<4)		
 #define ZIP_INT_32B (0xc0 | 1<<4)
 #define ZIP_INT_64B (0xc0 | 2<<4)
 #define ZIP_INT_24B (0xc0 | 3<<4)
@@ -136,6 +137,7 @@
 #define INT24_MIN (-INT24_MAX - 1)
 
 /* Macro to determine type */
+//判断是否是字符串编码
 #define ZIP_IS_STR(enc) (((enc) & ZIP_STR_MASK) < ZIP_STR_MASK)
 
 /* Utility macros */
@@ -155,11 +157,19 @@
         ZIPLIST_LENGTH(zl) = intrev16ifbe(intrev16ifbe(ZIPLIST_LENGTH(zl))+incr); \
 }
 
+//压缩链表结构体
 typedef struct zlentry {
+		//prevrawlensize为存储上一个链表节点的长度数值所需要的字节数
+		//prevrawlen为上一个链表节点占用的长度
     unsigned int prevrawlensize, prevrawlen;
+		//len为当前链表节点占用的长度
+		//lensize为存储当前链表节点长度数值所需要的字节数
     unsigned int lensize, len;
+		//当前链表节点的头部大小（prevrawlensize + lensize），即非数据域的大小
     unsigned int headersize;
+		//编码方式
     unsigned char encoding;
+		//压缩链表以字符串的形式保存，该指针指向当前节点起始位置
     unsigned char *p;
 } zlentry;
 
@@ -180,6 +190,7 @@ typedef struct zlentry {
 void ziplistRepr(unsigned char *zl);
 
 /* Return bytes needed to store integer encoded by 'encoding' */
+//返回指定整型编码方式所占用的字节长度
 static unsigned int zipIntSize(unsigned char encoding) {
     switch(encoding) {
     case ZIP_INT_8B:  return 1;
@@ -195,16 +206,20 @@ static unsigned int zipIntSize(unsigned char encoding) {
 
 /* Encode the length 'rawlen' writing it in 'p'. If p is NULL it just returns
  * the amount of bytes required to encode such a length. */
+//将编码方式encoding和数据长度rawlen进行编码并写入p指向的缓冲区中，返回保存该编码所占用的字节数
 static unsigned int zipEncodeLength(unsigned char *p, unsigned char encoding, unsigned int rawlen) {
     unsigned char len = 1, buf[5];
-
+		//判断是字符串类型还是整型
     if (ZIP_IS_STR(encoding)) {
         /* Although encoding is given it may not be set for strings,
          * so we determine it here using the raw length. */
         if (rawlen <= 0x3f) {
+						//字符串长度少于等于63
             if (!p) return len;
+						//设置ziplist头的字符串长度
             buf[0] = ZIP_STR_06B | rawlen;
         } else if (rawlen <= 0x3fff) {
+						//字符串长度小于等于16383（2^14 - 1），为01编码类型
             len += 1;
             if (!p) return len;
             buf[0] = ZIP_STR_14B | ((rawlen >> 8) & 0x3f);
@@ -233,6 +248,7 @@ static unsigned int zipEncodeLength(unsigned char *p, unsigned char encoding, un
  * entries encoding, the 'lensize' variable will hold the number of bytes
  * required to encode the entries length, and the 'len' variable will hold the
  * entries length. */
+//从ptr指向的字符串中取出链表节点的编码、保存节点长度所需要的字节数、节点长度，并分别保存在encoding、lensize、len3个变量中
 #define ZIP_DECODE_LENGTH(ptr, encoding, lensize, len) do {                    \
     ZIP_ENTRY_ENCODING((ptr), (encoding));                                     \
     if ((encoding) < ZIP_STR_MASK) {                                           \
