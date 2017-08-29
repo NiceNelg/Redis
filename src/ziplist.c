@@ -347,6 +347,7 @@ static int zipPrevLenByteDiff(unsigned char *p, unsigned int len) {
 }
 
 /* Return the total number of bytes used by the entry pointed to by 'p'. */
+//返回本节点的长度
 static unsigned int zipRawEntryLength(unsigned char *p) {
     unsigned int prevlensize, encoding, lensize, len;
 		//根据传入节点位置获取存储上一个链表节点的长度数值所需要的字节数并返回给prevlensize变量
@@ -358,13 +359,16 @@ static unsigned int zipRawEntryLength(unsigned char *p) {
 
 /* Check if string pointed to by 'entry' can be encoded as an integer.
  * Stores the integer value in 'v' and its encoding in 'encoding'. */
+//尝试看能否将entry保存为整数，如果可以则返回1，且v和encoding分别保存新值和编码信息
 static int zipTryEncoding(unsigned char *entry, unsigned int entrylen, long long *v, unsigned char *encoding) {
     long long value;
 
     if (entrylen >= 32 || entrylen == 0) return 0;
+		//string2ll定义在util.h中，它的作用是将一个字符串转换为一个long long类型整数值。如果成功返回1，失败返回0
     if (string2ll((char*)entry,entrylen,&value)) {
         /* Great, the string can be encoded. Check what's the smallest
          * of our encoding types that can hold this value. */
+				//下面的操作根据整型值确定编码方式
         if (value >= 0 && value <= 12) {
             *encoding = ZIP_INT_IMM_MIN+value;
         } else if (value >= INT8_MIN && value <= INT8_MAX) {
@@ -656,12 +660,15 @@ static unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsig
     }
 
     /* See if the entry can be encoded */
+		//尝试看能否将s保存为整数，如果可以则返回1，且value和encoding分别保存新值和编码信息
     if (zipTryEncoding(s,slen,&value,&encoding)) {
         /* 'encoding' is set to the appropriate integer encoding */
+				//返回保存s的所需字节数
         reqlen = zipIntSize(encoding);
     } else {
         /* 'encoding' is untouched, however zipEncodeLength will use the
          * string length to figure out how to encode it. */
+				//如果s不能保存为整数，则直接使用其字符串长度
         reqlen = slen;
     }
     /* We need space for both the length of the previous entry and
