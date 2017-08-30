@@ -673,7 +673,9 @@ static unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsig
     }
     /* We need space for both the length of the previous entry and
      * the length of the payload. */
+		//根据上个节点的长度返回保存上个节点长度的字节长度
     reqlen += zipPrevEncodeLength(NULL,prevlen);
+		//根据编码和字节内容返回长度
     reqlen += zipEncodeLength(NULL,encoding,slen);
 
     /* When the insert position is not equal to the tail, we need to
