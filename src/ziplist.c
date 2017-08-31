@@ -141,7 +141,7 @@
 #define ZIP_IS_STR(enc) (((enc) & ZIP_STR_MASK) < ZIP_STR_MASK)
 
 /* Utility macros */
- //操作ziplist结构体
+ //获取ziplist长度
 #define ZIPLIST_BYTES(zl)       (*((uint32_t*)(zl)))
 //将ziplist跳过4字节( 即获取最后一个节点的偏移值 )
 #define ZIPLIST_TAIL_OFFSET(zl) (*((uint32_t*)((zl)+sizeof(uint32_t))))
@@ -340,6 +340,7 @@ static void zipPrevEncodeLengthForceLarge(unsigned char *p, unsigned int len) {
 
 /* Return the difference in number of bytes needed to store the length of the
  * previous element 'len', in the entry pointed to by 'p'. */
+//返回两个节点之间长度的差值
 static int zipPrevLenByteDiff(unsigned char *p, unsigned int len) {
     unsigned int prevlensize;
     ZIP_DECODE_PREVLENSIZE(p, prevlensize);
@@ -389,6 +390,7 @@ static int zipTryEncoding(unsigned char *entry, unsigned int entrylen, long long
 }
 
 /* Store integer 'value' at 'p', encoded as 'encoding' */
+//保存整型节点
 static void zipSaveInteger(unsigned char *p, int64_t value, unsigned char encoding) {
     int16_t i16;
     int32_t i32;
@@ -451,6 +453,7 @@ static int64_t zipLoadInteger(unsigned char *p, unsigned char encoding) {
 }
 
 /* Return a struct with all information about an entry. */
+//设置节点结构体的值
 static void zipEntry(unsigned char *p, zlentry *e) {
 
     ZIP_DECODE_PREVLEN(p, e->prevrawlensize, e->prevrawlen);
@@ -482,10 +485,13 @@ unsigned char *ziplistNew(void) {
 }
 
 /* Resize the ziplist. */
-//重置ziplist,不释放内存空间
+//重新分配ziplist空间
 static unsigned char *ziplistResize(unsigned char *zl, unsigned int len) {
-    zl = zrealloc(zl,len);
+    //重新分配空间
+		zl = zrealloc(zl,len);
+		//更新ziplist表头记得的长度
     ZIPLIST_BYTES(zl) = intrev32ifbe(len);
+		//ziplist表记录表尾
     zl[len-1] = ZIP_END;
     return zl;
 }
@@ -511,7 +517,7 @@ static unsigned char *ziplistResize(unsigned char *zl, unsigned int len) {
  * The pointer "p" points to the first entry that does NOT need to be
  * updated, i.e. consecutive fields MAY need an update. */
 
-
+//更新指定节点后的所有节点的prevlen字段
 static unsigned char *__ziplistCascadeUpdate(unsigned char *zl, unsigned char *p) {
     size_t curlen = intrev32ifbe(ZIPLIST_BYTES(zl)), rawlen, rawlensize;
     size_t offset, noffset, extra;
@@ -529,35 +535,46 @@ static unsigned char *__ziplistCascadeUpdate(unsigned char *zl, unsigned char *p
 
         /* Abort when "prevlen" has not changed. */
         if (next.prevrawlen == rawlen) break;
-
+				
+				//如果下一个节点记录上个节点长度的字节大小比上个节点长度的字节大小要小
         if (next.prevrawlensize < rawlensize) {
             /* The "prevlen" field of "next" needs more bytes to hold
              * the raw length of "cur". */
+						//记录节点的偏移位置
             offset = p-zl;
+						//记录少了多少位置
             extra = rawlensize-next.prevrawlensize;
+						//重新分配内存
             zl = ziplistResize(zl,curlen+extra);
+						//获取节点新位置
             p = zl+offset;
 
             /* Current pointer and offset for next element. */
+						//获取下个节点的位置
             np = p+rawlen;
+						//记录下个节点的偏移
             noffset = np-zl;
 
             /* Update tail offset when next element is not the tail element. */
+						//如果下个节点不是尾节点
             if ((zl+intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))) != np) {
-                ZIPLIST_TAIL_OFFSET(zl) =
-                    intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))+extra);
+								//重新设置尾节点的偏移量
+                ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))+extra);
             }
 
             /* Move the tail to the back. */
-            memmove(np+rawlensize,
-                np+next.prevrawlensize,
-                curlen-noffset-next.prevrawlensize-1);
-            zipPrevEncodeLength(np,rawlen);
+						//将节点的内容移动到新位置
+            memmove(np+rawlensize, np+next.prevrawlensize, curlen-noffset-next.prevrawlensize-1);
+            //重新设置节点的prev字段
+						zipPrevEncodeLength(np,rawlen);
 
             /* Advance the cursor */
+						//移动到下一个节点
             p += rawlen;
+						//保存新长度
             curlen += extra;
         } else {
+						//如果下个节点记录上个节点长度大小的字节数比上个节点长度大小所占字节数要大 强制使用5字节
             if (next.prevrawlensize > rawlensize) {
                 /* This would result in shrinking, which we want to avoid.
                  * So, set "rawlen" in the available bytes. */
@@ -681,32 +698,39 @@ static unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsig
     /* When the insert position is not equal to the tail, we need to
      * make sure that the next entry can hold this entry's length in
      * its prevlen field. */
+		//插入位置不是最后位置, 则需要计算出下一个元素保存本元素prevlen字段空间是否足够, 不够时计算出欠缺的差值
     nextdiff = (p[0] != ZIP_END) ? zipPrevLenByteDiff(p,reqlen) : 0;
 
     /* Store offset because a realloc may change the address of zl. */
+		//计算节点在ziplist表的偏移位置
     offset = p-zl;
+		//重新分配ziplist表的空间
     zl = ziplistResize(zl,curlen+reqlen+nextdiff);
+		//更新指针p的地址
     p = zl+offset;
 
     /* Apply memory move when necessary and update tail offset. */
     if (p[0] != ZIP_END) {
         /* Subtract one because of the ZIP_END bytes */
+				//移动p原有位置和后面的内容到新的位置
         memmove(p+reqlen,p-nextdiff,curlen-offset-1+nextdiff);
 
         /* Encode this entry's raw length in the next entry. */
+				//修改下一个元素中保存待插入元素的长度prevlen字段
         zipPrevEncodeLength(p+reqlen,reqlen);
 
         /* Update offset for tail */
-        ZIPLIST_TAIL_OFFSET(zl) =
-            intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))+reqlen);
+				//设置最后一个节点的偏移值
+        ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))+reqlen);
 
         /* When the tail contains more than one entry, we need to take
          * "nextdiff" in account as well. Otherwise, a change in the
          * size of prevlen doesn't have an effect on the *tail* offset. */
+				//设置节点结构体的值
         zipEntry(p+reqlen, &tail);
+				//如果插入的p后面的节点不是最后一个节点时最后一个偏移地址还需要加上差值
         if (p[reqlen+tail.headersize+tail.len] != ZIP_END) {
-            ZIPLIST_TAIL_OFFSET(zl) =
-                intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))+nextdiff);
+            ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))+nextdiff);
         }
     } else {
         /* This element will be the new tail. */
