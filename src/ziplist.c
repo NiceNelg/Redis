@@ -145,7 +145,7 @@
 #define ZIPLIST_BYTES(zl)       (*((uint32_t*)(zl)))
 //将ziplist跳过4字节( 即获取最后一个节点的偏移值 )
 #define ZIPLIST_TAIL_OFFSET(zl) (*((uint32_t*)((zl)+sizeof(uint32_t))))
-//将ziplist跳过8字节
+//将ziplist跳过8字节( 即获取链表记录节点总数 )
 #define ZIPLIST_LENGTH(zl)      (*((uint16_t*)((zl)+sizeof(uint32_t)*2)))
 #define ZIPLIST_HEADER_SIZE     (sizeof(uint32_t)*2+sizeof(uint16_t))
 #define ZIPLIST_END_SIZE        (sizeof(uint8_t))
@@ -156,6 +156,7 @@
 
 /* We know a positive increment can only be 1 because entries can only be
  * pushed one at a time. */
+//更新链表记录节点总数字段
 #define ZIPLIST_INCR_LENGTH(zl,incr) { \
     if (ZIPLIST_LENGTH(zl) < UINT16_MAX) \
         ZIPLIST_LENGTH(zl) = intrev16ifbe(intrev16ifbe(ZIPLIST_LENGTH(zl))+incr); \
@@ -228,6 +229,7 @@ static unsigned int zipEncodeLength(unsigned char *p, unsigned char encoding, un
 						//字符串长度小于等于16383（2^14 - 1），为01编码类型
             len += 1;
             if (!p) return len;
+						//这里会有点绕,请耐心分析,高位先记录,低位记录在后面的元素中
             buf[0] = ZIP_STR_14B | ((rawlen >> 8) & 0x3f);
             buf[1] = rawlen & 0xff;
         } else {
@@ -304,6 +306,7 @@ static unsigned int zipPrevEncodeLength(unsigned char *p, unsigned int len) {
 
 /* Encode the length of the previous entry and write it to "p". This only
  * uses the larger encoding (required in __ziplistCascadeUpdate). */
+//强行将长度转换成5字节
 static void zipPrevEncodeLengthForceLarge(unsigned char *p, unsigned int len) {
 		if (p == NULL) return;	
     p[0] = ZIP_BIGLEN;
@@ -343,7 +346,9 @@ static void zipPrevEncodeLengthForceLarge(unsigned char *p, unsigned int len) {
 //返回两个节点之间长度的差值
 static int zipPrevLenByteDiff(unsigned char *p, unsigned int len) {
     unsigned int prevlensize;
+		//返回记录上一个节点长度占用的字节数
     ZIP_DECODE_PREVLENSIZE(p, prevlensize);
+		//根据节点的长度返回记录长度所占的字节数
     return zipPrevEncodeLength(NULL, len) - prevlensize;
 }
 
@@ -421,6 +426,7 @@ static void zipSaveInteger(unsigned char *p, int64_t value, unsigned char encodi
 }
 
 /* Read integer encoded as 'encoding' from 'p' */
+//获取整型节点的值
 static int64_t zipLoadInteger(unsigned char *p, unsigned char encoding) {
     int16_t i16;
     int32_t i32;
@@ -455,7 +461,7 @@ static int64_t zipLoadInteger(unsigned char *p, unsigned char encoding) {
 /* Return a struct with all information about an entry. */
 //设置节点结构体的值
 static void zipEntry(unsigned char *p, zlentry *e) {
-
+		//设置结构体的prerawlensize成员的值
     ZIP_DECODE_PREVLEN(p, e->prevrawlensize, e->prevrawlen);
     ZIP_DECODE_LENGTH(p + e->prevrawlensize, e->encoding, e->lensize, e->len);
     e->headersize = e->prevrawlensize + e->lensize;
@@ -591,18 +597,23 @@ static unsigned char *__ziplistCascadeUpdate(unsigned char *zl, unsigned char *p
 }
 
 /* Delete "num" entries, starting at "p". Returns pointer to the ziplist. */
+//从p指针开始删除num个节点
 static unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int num) {
     unsigned int i, totlen, deleted = 0;
     size_t offset;
     int nextdiff = 0;
     zlentry first, tail;
 
+		//将传入首节点的值赋值给节点结构体
     zipEntry(p, &first);
     for (i = 0; p[0] != ZIP_END && i < num; i++) {
-        p += zipRawEntryLength(p);
+        //获取需要删除的最后一个节点的后一个节点的地址
+				p += zipRawEntryLength(p);
+				//记录删除节点数
         deleted++;
     }
 
+		//获取删除节点的总长度
     totlen = p-first.p;
     if (totlen > 0) {
         if (p[0] != ZIP_END) {
@@ -610,40 +621,47 @@ static unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsig
              * number of bytes required compare to the current `prevrawlen`.
              * There always is room to store this, because it was previously
              * stored by an entry that is now being deleted. */
-            nextdiff = zipPrevLenByteDiff(p,first.prevrawlen);
+            //获取需要删除的最后一个节点的后一个节点记录上一个节点长度所占字节数
+						//和需要删除的第一个节点记录上个节点长度所占字节数的差
+						nextdiff = zipPrevLenByteDiff(p,first.prevrawlen);
             p -= nextdiff;
+						//给需要删除的最后一个节点的后一个节点的prerawlen字段重置字节数
             zipPrevEncodeLength(p,first.prevrawlen);
 
             /* Update offset for tail */
-            ZIPLIST_TAIL_OFFSET(zl) =
-                intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))-totlen);
+						//重新设置链表的记录最后一个节点位置的字段
+            ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))-totlen);
 
             /* When the tail contains more than one entry, we need to take
              * "nextdiff" in account as well. Otherwise, a change in the
              * size of prevlen doesn't have an effect on the *tail* offset. */
+						//将需要删除的最后一个节点的后一个节点的值赋值给节点结构体
             zipEntry(p, &tail);
+						//如果记录的节点不是最后一个节点则重新设置链表的记录最后一个节点位置的字段
             if (p[tail.headersize+tail.len] != ZIP_END) {
-                ZIPLIST_TAIL_OFFSET(zl) =
-                   intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))+nextdiff);
+                ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))+nextdiff);
             }
 
             /* Move tail to the front of the ziplist */
-            memmove(first.p,p,
-                intrev32ifbe(ZIPLIST_BYTES(zl))-(p-zl)-1);
+						//删除指定节点
+            memmove(first.p,p, intrev32ifbe(ZIPLIST_BYTES(zl))-(p-zl)-1);
         } else {
             /* The entire tail was deleted. No need to move memory. */
-            ZIPLIST_TAIL_OFFSET(zl) =
-                intrev32ifbe((first.p-zl)-first.prevrawlen);
+            ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe((first.p-zl)-first.prevrawlen);
         }
 
         /* Resize and update length */
         offset = first.p-zl;
-        zl = ziplistResize(zl, intrev32ifbe(ZIPLIST_BYTES(zl))-totlen+nextdiff);
-        ZIPLIST_INCR_LENGTH(zl,-deleted);
+        //更新链表内存空间
+				zl = ziplistResize(zl, intrev32ifbe(ZIPLIST_BYTES(zl))-totlen+nextdiff);
+        //更新链表记录节点数
+				ZIPLIST_INCR_LENGTH(zl,-deleted);
+				//因为第一个删除的节点地址就是链表更新内容后的变更内容的首地址
         p = zl+offset;
 
         /* When nextdiff != 0, the raw length of the next entry has changed, so
          * we need to cascade the update throughout the ziplist */
+				//如果要删除的最后一个节点的后一个节点记录上个节点长度的字节数与以前记录的字节数不相同时
         if (nextdiff != 0)
             zl = __ziplistCascadeUpdate(zl,p);
     }
