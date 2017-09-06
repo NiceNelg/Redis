@@ -80,7 +80,9 @@
 #include "zmalloc.h"
 #include "endianconv.h"
 
+//当压缩字典的键值对的值大于253时设置为254,长度用随后的4个字节表示
 #define ZIPMAP_BIGLEN 254
+//结束字段标识
 #define ZIPMAP_END 255
 
 /* The following defines the max value for the <free> field described in the
@@ -93,19 +95,24 @@
 #define ZIPMAP_LEN_BYTES(_l) (((_l) < ZIPMAP_BIGLEN) ? 1 : sizeof(unsigned int)+1)
 
 /* Create a new empty zipmap. */
+//创建压缩字典
 unsigned char *zipmapNew(void) {
+		//初始化时只有2个字节,第1个字节表示zipmap保存的key-value对的个数，第2个字节为结尾符
     unsigned char *zm = zmalloc(2);
-
+		//当前保存的键值对个数为0
     zm[0] = 0; /* Length */
     zm[1] = ZIPMAP_END;
     return zm;
 }
 
 /* Decode the encoded length pointed by 'p' */
+//返回键或值记录的长度
 static unsigned int zipmapDecodeLength(unsigned char *p) {
     unsigned int len = *p;
 
+		//如果少于254则第一个字节就是长度
     if (len < ZIPMAP_BIGLEN) return len;
+		//如果大于253则后面4个字节记录的才是长度
     memcpy(&len,p+1,sizeof(unsigned int));
     memrev32ifbe(&len);
     return len;
@@ -135,14 +142,16 @@ static unsigned int zipmapEncodeLength(unsigned char *p, unsigned int len) {
  * If NULL is returned, and totlen is not NULL, it is set to the entire
  * size of the zimap, so that the calling function will be able to
  * reallocate the original zipmap to make room for more entries. */
+//
 static unsigned char *zipmapLookupRaw(unsigned char *zm, unsigned char *key, unsigned int klen, unsigned int *totlen) {
     unsigned char *p = zm+1, *k = NULL;
     unsigned int l,llen;
-
+		//查找压缩字典里是否含有对应的key
     while(*p != ZIPMAP_END) {
         unsigned char free;
 
         /* Match or skip the key */
+				//获取键的长度
         l = zipmapDecodeLength(p);
         llen = zipmapEncodeLength(NULL,l);
         if (key != NULL && k == NULL && l == klen && !memcmp(p+llen,key,l)) {
@@ -165,11 +174,15 @@ static unsigned char *zipmapLookupRaw(unsigned char *zm, unsigned char *key, uns
     return k;
 }
 
+//返回键值对初始长度
 static unsigned long zipmapRequiredLength(unsigned int klen, unsigned int vlen) {
     unsigned int l;
 
+		//key+value长度+keylength( 初始为1 )+valuelength( 初始为1 )+free的长度
     l = klen+vlen+3;
+		//如果keylength的长度大于253
     if (klen >= ZIPMAP_BIGLEN) l += 4;
+		//如果valuelength的长度大于253
     if (vlen >= ZIPMAP_BIGLEN) l += 4;
     return l;
 }
@@ -208,7 +221,8 @@ static inline unsigned char *zipmapResize(unsigned char *zm, unsigned int len) {
 /* Set key to value, creating the key if it does not already exist.
  * If 'update' is not NULL, *update is set to 1 if the key was
  * already preset, otherwise to 0. */
-unsigned char *zipmapSet(unsigned char *zm, unsigned char *key, unsigned int klen, unsigned char *val, unsigned int vlen, int *update) {
+//插入或更新键值对
+unsigned char *zipmapSet(unsigned char *zm,unsigned char *key,unsigned int klen,unsigned char *val,unsigned int vlen,int *update) {
     unsigned int zmlen, offset;
     unsigned int freelen, reqlen = zipmapRequiredLength(klen,vlen);
     unsigned int empty, vempty;
