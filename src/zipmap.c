@@ -92,6 +92,7 @@
 /* The following macro returns the number of bytes needed to encode the length
  * for the integer value _l, that is, 1 byte for lengths < ZIPMAP_BIGLEN and
  * 5 bytes for all the other lengths. */
+//根据长度大小返回长度字段字节数
 #define ZIPMAP_LEN_BYTES(_l) (((_l) < ZIPMAP_BIGLEN) ? 1 : sizeof(unsigned int)+1)
 
 /* Create a new empty zipmap. */
@@ -122,6 +123,7 @@ static unsigned int zipmapDecodeLength(unsigned char *p) {
  * the amount of bytes required to encode such a length. */
 static unsigned int zipmapEncodeLength(unsigned char *p, unsigned int len) {
     if (p == NULL) {
+				//如果没有传入指针则根据传入长度返回记录长度的字段所占字节数
         return ZIPMAP_LEN_BYTES(len);
     } else {
         if (len < ZIPMAP_BIGLEN) {
@@ -142,7 +144,7 @@ static unsigned int zipmapEncodeLength(unsigned char *p, unsigned int len) {
  * If NULL is returned, and totlen is not NULL, it is set to the entire
  * size of the zimap, so that the calling function will be able to
  * reallocate the original zipmap to make room for more entries. */
-//
+//在压缩字典中查找对应的key,若totlen不为空则totlen存入压缩字典的长度
 static unsigned char *zipmapLookupRaw(unsigned char *zm, unsigned char *key, unsigned int klen, unsigned int *totlen) {
     unsigned char *p = zm+1, *k = NULL;
     unsigned int l,llen;
@@ -153,23 +155,33 @@ static unsigned char *zipmapLookupRaw(unsigned char *zm, unsigned char *key, uns
         /* Match or skip the key */
 				//获取键的长度
         l = zipmapDecodeLength(p);
+				//根据键的长度获取记录键长度字段所占的字节数
         llen = zipmapEncodeLength(NULL,l);
+				//当压缩字典中含有对应的key时,返回此键值对的首地址
         if (key != NULL && k == NULL && l == klen && !memcmp(p+llen,key,l)) {
             /* Only return when the user doesn't care
              * for the total length of the zipmap. */
+						//当totlen形参不为NULL时说明还需要返回压缩字典的长度
             if (totlen != NULL) {
+								//k保存以查找到的key的地址
                 k = p;
             } else {
                 return p;
             }
         }
+				//跳过键和记录键长度的字段
         p += llen+l;
         /* Skip the value as well */
+				//获取value的长度
         l = zipmapDecodeLength(p);
+				//跳过记录value长度的字段长度
         p += zipmapEncodeLength(NULL,l);
+				//获取value中的空闲空间
         free = p[0];
+				//跳过value长度和空闲长度
         p += l+1+free; /* +1 to skip the free byte */
     }
+		//如果totlen不为NULL则记录压缩字典的长度
     if (totlen != NULL) *totlen = (unsigned int)(p-zm)+1;
     return k;
 }
@@ -212,6 +224,7 @@ static unsigned int zipmapRawEntryLength(unsigned char *p) {
     return l + zipmapRawValueLength(p+l);
 }
 
+//给压缩字典重新分配空间
 static inline unsigned char *zipmapResize(unsigned char *zm, unsigned int len) {
     zm = zrealloc(zm, len);
     zm[len-1] = ZIPMAP_END;
@@ -230,14 +243,20 @@ unsigned char *zipmapSet(unsigned char *zm,unsigned char *key,unsigned int klen,
 
     freelen = reqlen;
     if (update) *update = 0;
+		//查找是否有对应的key且获取压缩字典的长度保存在zmlen变量中
     p = zipmapLookupRaw(zm,key,klen,&zmlen);
+		//如果压缩字典不存在对应的key时
     if (p == NULL) {
         /* Key not found: enlarge */
+				//增加压缩字典的内存空间
         zm = zipmapResize(zm, zmlen+reqlen);
+				//从压缩字典的最后一个键值对后加新的键值对
         p = zm+zmlen-1;
+				//重新计算压缩字典的长度
         zmlen = zmlen+reqlen;
 
         /* Increase zipmap length (this is an insert) */
+				//增加键值对记录数
         if (zm[0] < ZIPMAP_BIGLEN) zm[0]++;
     } else {
         /* Key found. Is there enough space for the new value? */
