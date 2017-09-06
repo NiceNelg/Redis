@@ -165,7 +165,7 @@
         ZIPLIST_LENGTH(zl) = intrev16ifbe(intrev16ifbe(ZIPLIST_LENGTH(zl))+incr); \
 }
 
-//ziplist表的节点结构体
+//ziplist表的节点结构体( 不作为数据记录在链表,只用作节点数据操作时的对象化 )
 typedef struct zlentry {
 		//prevrawlensize为存储上一个链表节点的长度数值所需要的字节数
 		//prevrawlen为上一个链表节点占用的长度
