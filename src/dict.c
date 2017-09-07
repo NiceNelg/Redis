@@ -179,6 +179,7 @@ unsigned int dictGenCaseHashFunction(const unsigned char *buf, int len) {
 
 //私有方法，重置哈希表，参数是dictht哈希表结构
 static void _dictReset(dictht *ht) {
+		//将哈希表的地址记录置NULL,不清除二维数组内容
     ht->table = NULL;
     ht->size = 0;
     ht->sizemask = 0;
@@ -274,10 +275,13 @@ int dictExpand(dict *d, unsigned long size) {
 
 //执行n步渐进式的rehash操作，如果还有key需要从旧表迁移到新表则返回1，否则返回0
 int dictRehash(dict *d, int n) {
+		//最大查看空桶数
     int empty_visits = n*10; /* Max number of empty buckets to visit. */
+		//查看是否正在执行rehash操作
     if (!dictIsRehashing(d)) return 0;
 
 		//n步渐进式的rehash操作就是每次只迁移哈希数组中的n个元素
+		//最大查看空桶数不为0且哈希链表0不为空
     while(n-- && d->ht[0].used != 0) {
         dictEntry *de, *nextde;
 
@@ -290,31 +294,45 @@ int dictRehash(dict *d, int n) {
             d->rehashidx++;
             if (--empty_visits == 0) return 1;
         }
+				//获取键值对
         de = d->ht[0].table[d->rehashidx];
         /* Move all the keys in this bucket from the old to the new hash HT */
         //下面的操作将每个节点（键值对）从ht[0]迁移到ht[1]
+				//注:每个键值对结构体的next成员都为空,这个循环可能只是为了兼容,实际上只是执行移动一个键值对的操作
 				while(de) {
             unsigned int h;
-
+						//无用操作
             nextde = de->next;
             /* Get the index in the new hash table */
-            //重新计算每个哈希节点的key对应的哈希值
+            //重新计算key的哈希值并与哈希表的sizemask进行于运算( 就是减一 )
 						h = dictHashKey(d, de->key) & d->ht[1].sizemask;
+						//无用操作
             de->next = d->ht[1].table[h];
+						//移动哈希表0对应的键值对到哈希表1
             d->ht[1].table[h] = de;
+						//计算哈希表0中已存在的键值对
             d->ht[0].used--;
+						//计算哈希表1中已存在的键值对
             d->ht[1].used++;
+						//无用操作
             de = nextde;
         }
+				//清空哈希表0中的对应键值对
         d->ht[0].table[d->rehashidx] = NULL;
+				//rehash操作地址增加1
         d->rehashidx++;
     }
 
     /* Check if we already rehashed the whole table... */
+		//查看是否还可以继续进行rehash操作,若键值对已经全部移动到哈希表1,则将哈希表1赋值给哈希表0,清空哈希表1,rehash操作完成
     if (d->ht[0].used == 0) {
+				//释放哈希表0的内存空间
         zfree(d->ht[0].table);
+				//将哈希表1的首地址赋值给哈希表0
         d->ht[0] = d->ht[1];
+				//清空哈希表1( 只是将哈希表1的地址记录置NULL 并不是清空数组 )
         _dictReset(&d->ht[1]);
+				//字典的rehash记录记为完成
         d->rehashidx = -1;
         return 0;
     }
@@ -362,10 +380,12 @@ static void _dictRehashStep(dict *d) {
 /* Add an element to the target hash table */
 //往字典中添加一个新的键值对
 int dictAdd(dict *d, void *key, void *val) {
-    dictEntry *entry = dictAddRaw(d,key);
+    //获取一个新的键值对空间,且已设置key值
+		dictEntry *entry = dictAddRaw(d,key);
 
     if (!entry) return DICT_ERR;
-    dictSetVal(d, entry, val);
+    //设置键值对的value值
+		dictSetVal(d, entry, val);
     return DICT_OK;
 }
 
@@ -385,12 +405,12 @@ int dictAdd(dict *d, void *key, void *val) {
  * If key was added, the hash entry is returned to be manipulated by the caller.
  */
 
-//dictAdd的底层实现方法。往字典中添加一个只有key的dictEntry结构，如果给定的key已经存在，则返回NULL
+//添加键值对的底层实现方法。往字典中添加一个只有key的dictEntry结构，如果给定的key已经存在，则返回NULL
 dictEntry *dictAddRaw(dict *d, void *key) {
     int index;
     dictEntry *entry;
     dictht *ht;
-
+		//查看字典是否正在执行rehash操作,若是则继续执行一步
     if (dictIsRehashing(d)) _dictRehashStep(d);
 
     /* Get the index of the new element, or -1 if
@@ -410,7 +430,7 @@ dictEntry *dictAddRaw(dict *d, void *key) {
     ht->used++;
 
     /* Set the hash entry fields. */
-		//复制key
+		//设置key成员的值
     dictSetKey(d, entry, key);
     return entry;
 }
@@ -451,6 +471,7 @@ int dictReplace(dict *d, void *key, void *val) {
  * existing key is returned.)
  *
  * See dictAddRaw() for more information. */
+//与上述方法相同,返回的是进行操作的键值对
 dictEntry *dictReplaceRaw(dict *d, void *key) {
     dictEntry *entry = dictFind(d,key);
 
@@ -485,6 +506,7 @@ static int dictGenericDelete(dict *d, const void *key, int nofree) {
                     dictFreeKey(d, he);
                     dictFreeVal(d, he);
                 }
+								//删除键值对
                 zfree(he);
                 d->ht[table].used--;
                 return DICT_OK;
@@ -1014,15 +1036,17 @@ static int _dictExpandIfNeeded(dict *d) {
     if (dictIsRehashing(d)) return DICT_OK;
 
     /* If the hash table is empty expand it to the initial size. */
-		//如果哈希表是第一此分配大小
+		//如果哈希表是第一此使用,分配初始空间
     if (d->ht[0].size == 0) return dictExpand(d, DICT_HT_INITIAL_SIZE);
 
     /* If we reached the 1:1 ratio, and we are allowed to resize the hash
      * table (global setting) or we should avoid it but the ratio between
      * elements/buckets is over the "safe" threshold, we resize doubling
      * the number of buckets. */
+		//如果哈希表的已存在的键值对数量大于等于哈希表的大小且哈希表可扩容或者哈希表的使用数大于哈希表容量的5倍
     if (d->ht[0].used >= d->ht[0].size &&(dict_can_resize || d->ht[0].used/d->ht[0].size > dict_force_resize_ratio)) {
-        return dictExpand(d, d->ht[0].used*2);
+        //扩容哈希表0,扩容倍数是已存在的键值对的5倍
+				return dictExpand(d, d->ht[0].used*2);
     }
     return DICT_OK;
 }
@@ -1048,16 +1072,17 @@ static unsigned long _dictNextPower(unsigned long size) {
  * Note that if we are in the process of rehashing the hash table, the
  * index is always returned in the context of the second (new) hash table. */
 
-//返回给定key对应的空闲的索引节点，如果该key已经存在，则返回-1
+//返回键值对对应的空闲的索引节点，如果该键值对已经存在，则返回-1
 static int _dictKeyIndex(dict *d, const void *key) {
     unsigned int h, idx, table;
     dictEntry *he;
 
     /* Expand the hash table if needed */
+		//判断哈希表是否需要扩容,如果需要则扩容并返回-1
     if (_dictExpandIfNeeded(d) == DICT_ERR)
         return -1;
     /* Compute the key hash value */
-		//调用对应的哈希算法获得给定key的哈希值
+		//调用对应的哈希算法获得给定key的哈希值( 是一串数字 )
 		//哈希值是一种将字符串转换不可逆的32位数的加密算法 理论上每个字符串得到的哈希值是唯一的 但实际上也有重复的可能
     h = dictHashKey(d, key);
 
@@ -1067,7 +1092,9 @@ static int _dictKeyIndex(dict *d, const void *key) {
         /* Search if this slot does not already contain the given key */
         he = d->ht[table].table[idx];
 				//判断key值是否相等( 注:存在但不相同的key将被覆盖 )
+				//注:这里是循环但实际上next成员为NULL,因此只执行一次
         while(he) {
+						//比较key是否相同
             if (key==he->key || dictCompareKeys(d, key, he->key))
                 return -1;
             he = he->next;

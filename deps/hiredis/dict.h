@@ -73,6 +73,7 @@ typedef struct dictIterator {
 } dictIterator;
 
 /* This is the initial size of every hash table */
+//初始哈希表的容量大小
 #define DICT_HT_INITIAL_SIZE     4
 
 /* ------------------------------- Macros ------------------------------------*/
@@ -102,7 +103,7 @@ typedef struct dictIterator {
     (((ht)->type->keyCompare) ? \
         (ht)->type->keyCompare((ht)->privdata, key1, key2) : \
         (key1) == (key2))
-
+//调用对应的哈希算法获得给定key的哈希值
 #define dictHashKey(ht, key) (ht)->type->hashFunction(key)
 
 #define dictGetEntryKey(he) ((he)->key)

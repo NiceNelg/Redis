@@ -155,6 +155,7 @@ typedef void (dictScanFunction)(void *privdata, const dictEntry *de);
 #define dictGetDoubleVal(he) ((he)->v.d)
 #define dictSlots(d) ((d)->ht[0].size+(d)->ht[1].size)
 #define dictSize(d) ((d)->ht[0].used+(d)->ht[1].used)
+//返回字典是否正在执行rehash操作
 #define dictIsRehashing(d) ((d)->rehashidx != -1)
 
 /* API */
