@@ -298,15 +298,15 @@ int dictRehash(dict *d, int n) {
         de = d->ht[0].table[d->rehashidx];
         /* Move all the keys in this bucket from the old to the new hash HT */
         //下面的操作将每个节点（键值对）从ht[0]迁移到ht[1]
-				//注:每个键值对结构体的next成员都为空,这个循环可能只是为了兼容,实际上只是执行移动一个键值对的操作
+				//注:因为可能有与数组元素相同的哈希的键值对
 				while(de) {
             unsigned int h;
-						//无用操作
+						//记录下一个与数组元素相同哈希值的键值对
             nextde = de->next;
             /* Get the index in the new hash table */
             //重新计算key的哈希值并与哈希表的sizemask进行于运算( 就是减一 )
 						h = dictHashKey(d, de->key) & d->ht[1].sizemask;
-						//无用操作
+						//数组元素的地址记录到节点的next成员中
             de->next = d->ht[1].table[h];
 						//移动哈希表0对应的键值对到哈希表1
             d->ht[1].table[h] = de;
@@ -314,7 +314,7 @@ int dictRehash(dict *d, int n) {
             d->ht[0].used--;
 						//计算哈希表1中已存在的键值对
             d->ht[1].used++;
-						//无用操作
+						//获取下一个与数组元素相同哈希值的键值对
             de = nextde;
         }
 				//清空哈希表0中的对应键值对
@@ -415,6 +415,7 @@ dictEntry *dictAddRaw(dict *d, void *key) {
 
     /* Get the index of the new element, or -1 if
      * the element already exists. */
+		//查看是否存在相同的key,注:不是哈希值相同
     if ((index = _dictKeyIndex(d, key)) == -1)
         return NULL;
 
@@ -422,9 +423,15 @@ dictEntry *dictAddRaw(dict *d, void *key) {
      * Insert the element in top, with the assumption that in a database
      * system it is more likely that recently added entries are accessed
      * more frequently. */
-		//如果正在进行rehash操作则将键值对添加在1哈希表
+		//如果正在进行rehash操作则将键值对添加在哈希表1中
     ht = dictIsRehashing(d) ? &d->ht[1] : &d->ht[0];
     entry = zmalloc(sizeof(*entry));
+		//使用拉链法解决冲突
+		//解析:
+		//情况1:当key第一次插入( 哈希表内不存在与这个key相同的哈希值的数组元素时 ),键值对结构体的next成员为空
+		//情况2:当key插入时,数组内已存在有与key相同哈希值的键值对时,键值对结构体next成员记录数组中的键值对结构体的首地址,而数组的记录
+		//			的元素代替为新的键值对结构体( 即key )
+		//混淆点:数组的下标并不代表元素的地址
     entry->next = ht->table[index];
     ht->table[index] = entry;
     ht->used++;
@@ -1091,8 +1098,7 @@ static int _dictKeyIndex(dict *d, const void *key) {
         idx = h & d->ht[table].sizemask;
         /* Search if this slot does not already contain the given key */
         he = d->ht[table].table[idx];
-				//判断key值是否相等( 注:存在但不相同的key将被覆盖 )
-				//注:这里是循环但实际上next成员为NULL,因此只执行一次
+				//判断key值是否相等
         while(he) {
 						//比较key是否相同
             if (key==he->key || dictCompareKeys(d, key, he->key))
