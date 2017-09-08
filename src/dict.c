@@ -431,7 +431,7 @@ dictEntry *dictAddRaw(dict *d, void *key) {
 		//情况1:当key第一次插入( 哈希表内不存在与这个key相同的哈希值的数组元素时 ),键值对结构体的next成员为空
 		//情况2:当key插入时,数组内已存在有与key相同哈希值的键值对时,键值对结构体next成员记录数组中的键值对结构体的首地址,而数组的记录
 		//			的元素代替为新的键值对结构体( 即key )
-		//混淆点:数组的下标并不代表元素的地址
+		//
     entry->next = ht->table[index];
     ht->table[index] = entry;
     ht->used++;
@@ -1091,6 +1091,7 @@ static int _dictKeyIndex(dict *d, const void *key) {
     /* Compute the key hash value */
 		//调用对应的哈希算法获得给定key的哈希值( 是一串数字 )
 		//哈希值是一种将字符串转换不可逆的32位数的加密算法 理论上每个字符串得到的哈希值是唯一的 但实际上也有重复的可能
+		//在获取key对应的哈希值时会对数组下标进行取模防止指针使用未分配空间
     h = dictHashKey(d, key);
 
     for (table = 0; table <= 1; table++) {
