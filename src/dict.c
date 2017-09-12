@@ -1091,7 +1091,6 @@ static int _dictKeyIndex(dict *d, const void *key) {
     /* Compute the key hash value */
 		//调用对应的哈希算法获得给定key的哈希值( 是一串数字 )
 		//哈希值是一种将字符串转换不可逆的32位数的加密算法 理论上每个字符串得到的哈希值是唯一的 但实际上也有重复的可能
-		//在获取key对应的哈希值时会对数组下标进行取模防止指针使用未分配空间
     h = dictHashKey(d, key);
 
     for (table = 0; table <= 1; table++) {

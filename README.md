@@ -31,7 +31,7 @@ adlist.c
 dict.h  
 dict.c ( 这个模块的代码顺序挺乱的 源码函数阅读顺序建议参考：http://huangz.iteye.com/blog/1455808 
 				同时感谢博主：http://blog.csdn.net/xiejingfa/article/details/51018337 
-				大部分注释都是那里的，汗-.-，函数定义顺序实在太乱了。注:在哈希节点结构体dictEntry中的next成员一直为NULL值 )  
+				大部分注释都是那里的，汗-.-，函数定义顺序实在太乱了。注:在阅读前请先了解散列表及二级指针的内存结构 )  
   
 ziplist.h  
 ziplist.c ( 此模块实现的是一个单向的压缩链表数据，非结构体实现方式，建议从ziplistInsert函数开始阅读，详细数据结构请参考：http://blog.csdn.net/xiejingfa/article/details/51072326 )  
