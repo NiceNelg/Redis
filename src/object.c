@@ -52,6 +52,7 @@ robj *createObject(int type, void *ptr) {
 
 /* Create a string object with encoding OBJ_ENCODING_RAW, that is a plain
  * string object where o->ptr points to a proper sds string. */
+//创建OBJ_ENCODING_RAW编码字符串对象
 robj *createRawStringObject(const char *ptr, size_t len) {
     return createObject(OBJ_STRING,sdsnewlen(ptr,len));
 }
@@ -59,6 +60,7 @@ robj *createRawStringObject(const char *ptr, size_t len) {
 /* Create a string object with encoding OBJ_ENCODING_EMBSTR, that is
  * an object where the sds string is actually an unmodifiable string
  * allocated in the same chunk as the object itself. */
+//创建OBJ_ENCODING_EMBSTR编码字符串对象
 robj *createEmbeddedStringObject(const char *ptr, size_t len) {
     robj *o = zmalloc(sizeof(robj)+sizeof(struct sdshdr8)+len+1);
     struct sdshdr8 *sh = (void*)(o+1);
@@ -87,7 +89,9 @@ robj *createEmbeddedStringObject(const char *ptr, size_t len) {
  *
  * The current limit of 39 is chosen so that the biggest string object
  * we allocate as EMBSTR will still fit into the 64 byte arena of jemalloc. */
+//字符串大小区别长度
 #define OBJ_ENCODING_EMBSTR_SIZE_LIMIT 44
+//创建字符串类型object
 robj *createStringObject(const char *ptr, size_t len) {
     if (len <= OBJ_ENCODING_EMBSTR_SIZE_LIMIT)
         return createEmbeddedStringObject(ptr,len);
@@ -95,6 +99,7 @@ robj *createStringObject(const char *ptr, size_t len) {
         return createRawStringObject(ptr,len);
 }
 
+//创建long long类型数字字符串对象
 robj *createStringObjectFromLongLong(long long value) {
     robj *o;
     if (value >= 0 && value < OBJ_SHARED_INTEGERS) {
@@ -118,6 +123,7 @@ robj *createStringObjectFromLongLong(long long value) {
  * and the output of snprintf() is not modified.
  *
  * The 'humanfriendly' option is used for INCRBYFLOAT and HINCRBYFLOAT. */
+//根据一个long double类型浮点数创建一个字符串对象，编码方式为REDIS_ENCODING_RAW 
 robj *createStringObjectFromLongDouble(long double value, int humanfriendly) {
     char buf[256];
     int len;
@@ -162,6 +168,7 @@ robj *createStringObjectFromLongDouble(long double value, int humanfriendly) {
  * will always result in a fresh object that is unshared (refcount == 1).
  *
  * The resulting object always has refcount set to 1. */
+//复制一个字符串对象
 robj *dupStringObject(robj *o) {
     robj *d;
 
@@ -183,6 +190,7 @@ robj *dupStringObject(robj *o) {
     }
 }
 
+//创建快速list对象
 robj *createQuicklistObject(void) {
     quicklist *l = quicklistCreate();
     robj *o = createObject(OBJ_LIST,l);
@@ -190,6 +198,7 @@ robj *createQuicklistObject(void) {
     return o;
 }
 
+//创建压缩列表对象
 robj *createZiplistObject(void) {
     unsigned char *zl = ziplistNew();
     robj *o = createObject(OBJ_LIST,zl);
@@ -197,6 +206,7 @@ robj *createZiplistObject(void) {
     return o;
 }
 
+//创建集合对象
 robj *createSetObject(void) {
     dict *d = dictCreate(&setDictType,NULL);
     robj *o = createObject(OBJ_SET,d);
@@ -204,6 +214,7 @@ robj *createSetObject(void) {
     return o;
 }
 
+//创建整数集合对象
 robj *createIntsetObject(void) {
     intset *is = intsetNew();
     robj *o = createObject(OBJ_SET,is);
@@ -211,6 +222,7 @@ robj *createIntsetObject(void) {
     return o;
 }
 
+//创建哈希对象
 robj *createHashObject(void) {
     unsigned char *zl = ziplistNew();
     robj *o = createObject(OBJ_HASH, zl);
@@ -218,6 +230,7 @@ robj *createHashObject(void) {
     return o;
 }
 
+//创建有序集合对象
 robj *createZsetObject(void) {
     zset *zs = zmalloc(sizeof(*zs));
     robj *o;
@@ -229,6 +242,7 @@ robj *createZsetObject(void) {
     return o;
 }
 
+//创建有序集合对象 ( 压缩列表方式 )
 robj *createZsetZiplistObject(void) {
     unsigned char *zl = ziplistNew();
     robj *o = createObject(OBJ_ZSET,zl);
@@ -236,12 +250,14 @@ robj *createZsetZiplistObject(void) {
     return o;
 }
 
+//释放字符串对象
 void freeStringObject(robj *o) {
     if (o->encoding == OBJ_ENCODING_RAW) {
         sdsfree(o->ptr);
     }
 }
 
+//释放list对象
 void freeListObject(robj *o) {
     switch (o->encoding) {
     case OBJ_ENCODING_QUICKLIST:
@@ -296,10 +312,12 @@ void freeHashObject(robj *o) {
     }
 }
 
+//增加对象引用计数
 void incrRefCount(robj *o) {
     o->refcount++;
 }
 
+//根据对象类型释放对象
 void decrRefCount(robj *o) {
 		//打印信息
     if (o->refcount <= 0) serverPanic("decrRefCount against refcount <= 0");
@@ -338,6 +356,7 @@ void decrRefCountVoid(void *o) {
  *    functionThatWillIncrementRefCount(obj);
  *    decrRefCount(obj);
  */
+//对象计数置零
 robj *resetRefCount(robj *obj) {
     obj->refcount = 0;
     return obj;
