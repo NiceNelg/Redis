@@ -36,12 +36,14 @@
 #define strtold(a,b) ((long double)strtod((a),(b)))
 #endif
 
+//创建redis数据对象方法
 robj *createObject(int type, void *ptr) {
     robj *o = zmalloc(sizeof(*o));
     o->type = type;
     o->encoding = OBJ_ENCODING_RAW;
     o->ptr = ptr;
-    o->refcount = 1;
+    //refcount表示对象的引用计数
+		o->refcount = 1;
 
     /* Set the LRU to the current lruclock (minutes resolution). */
     o->lru = LRU_CLOCK();

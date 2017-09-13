@@ -189,6 +189,7 @@ typedef long long mstime_t; /* millisecond time type. */
 #define CMD_FAST 8192                 /* "F" flag */
 
 /* Object types */
+//4位的type表示具体的数据类型。Redis中共有5中数据类型。2^4 = 8足以表示这些类型。
 #define OBJ_STRING 0
 #define OBJ_LIST 1
 #define OBJ_SET 2
@@ -198,6 +199,7 @@ typedef long long mstime_t; /* millisecond time type. */
 /* Objects encoding. Some kind of objects like Strings and Hashes can be
  * internally represented in multiple ways. The 'encoding' field of the object
  * is set to one of this fields for this object. */
+//4位的encoding表示该类型的物理编码方式，同一种数据类型可能有不同的编码方式
 #define OBJ_ENCODING_RAW 0     /* Raw representation */
 #define OBJ_ENCODING_INT 1     /* Encoded as integer */
 #define OBJ_ENCODING_HT 2      /* Encoded as hash table */
@@ -460,11 +462,18 @@ typedef long long mstime_t; /* millisecond time type. */
 #define LRU_BITS 24
 #define LRU_CLOCK_MAX ((1<<LRU_BITS)-1) /* Max value of obj->lru */
 #define LRU_CLOCK_RESOLUTION 1000 /* LRU clock resolution in ms */
+//Redis中的object结构体
 typedef struct redisObject {
-    unsigned type:4;
+		//成员:数字 这种方式代表的是此成员占用4位域,即占用4位二进制
+    //type表示具体的数据类型。Redis中共有5中数据类型。2^4 = 8足以表示这些类型。
+		unsigned type:4;
+		//4位的encoding表示该类型的物理编码方式
     unsigned encoding:4;
+		//lru字段表示当内存超限时采用LRU算法清除内存中的对象
     unsigned lru:LRU_BITS; /* lru time (relative to server.lruclock) */
+		//refcount表示对象的引用计数
     int refcount;
+		//ptr指针指向真正的存储结构
     void *ptr;
 } robj;
 
