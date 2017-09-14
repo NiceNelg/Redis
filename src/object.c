@@ -61,8 +61,11 @@ robj *createRawStringObject(const char *ptr, size_t len) {
  * an object where the sds string is actually an unmodifiable string
  * allocated in the same chunk as the object itself. */
 //创建OBJ_ENCODING_EMBSTR编码字符串对象
+//与上一个方法相比不同的是字符串内容上面是记录在另一个指针,这个方法是记录在对象结构体的ptr指针中
 robj *createEmbeddedStringObject(const char *ptr, size_t len) {
     robj *o = zmalloc(sizeof(robj)+sizeof(struct sdshdr8)+len+1);
+		//因为结构体robj的大小是成员大小,而ptr因为是指针,因此大小为4个字节
+		//这里的o+1指的是跳过整个obj的结构体,因此sh指向的地址是ptr后的地址
     struct sdshdr8 *sh = (void*)(o+1);
 
     o->type = OBJ_STRING;
@@ -91,7 +94,7 @@ robj *createEmbeddedStringObject(const char *ptr, size_t len) {
  * we allocate as EMBSTR will still fit into the 64 byte arena of jemalloc. */
 //字符串大小区别长度
 #define OBJ_ENCODING_EMBSTR_SIZE_LIMIT 44
-//创建字符串类型object
+//创建字符串类型object,根据字符串大小区别创建方法
 robj *createStringObject(const char *ptr, size_t len) {
     if (len <= OBJ_ENCODING_EMBSTR_SIZE_LIMIT)
         return createEmbeddedStringObject(ptr,len);
@@ -128,6 +131,7 @@ robj *createStringObjectFromLongDouble(long double value, int humanfriendly) {
     char buf[256];
     int len;
 
+		//判断是否为无穷数
     if (isinf(value)) {
         /* Libc in odd systems (Hi Solaris!) will format infinite in a
          * different way, so better to handle it in an explicit way. */
@@ -144,8 +148,10 @@ robj *createStringObjectFromLongDouble(long double value, int humanfriendly) {
          * way that is "non surprising" for the user (that is, most small
          * decimal numbers will be represented in a way that when converted
          * back into a string are exactly the same as what the user typed.) */
-        len = snprintf(buf,sizeof(buf),"%.17Lf", value);
+        //按实数方式将double类型数字以字符串形式复制到buf中
+				len = snprintf(buf,sizeof(buf),"%.17Lf", value);
         /* Now remove trailing zeroes after the '.' */
+				//移除多余的0
         if (strchr(buf,'.') != NULL) {
             char *p = buf+len-1;
             while(*p == '0') {
@@ -172,8 +178,10 @@ robj *createStringObjectFromLongDouble(long double value, int humanfriendly) {
 robj *dupStringObject(robj *o) {
     robj *d;
 
+		//检查对象类型是否为OBJ_STRING类型,不是则报错
     serverAssert(o->type == OBJ_STRING);
 
+		//创建新的字符串对象并返回
     switch(o->encoding) {
     case OBJ_ENCODING_RAW:
         return createRawStringObject(o->ptr,sdslen(o->ptr));
@@ -362,6 +370,7 @@ robj *resetRefCount(robj *obj) {
     return obj;
 }
 
+//检查对象o的类型是否和类型type一致
 int checkType(client *c, robj *o, int type) {
     if (o->type != type) {
         addReply(c,shared.wrongtypeerr);
@@ -370,6 +379,7 @@ int checkType(client *c, robj *o, int type) {
     return 0;
 }
 
+//判断一个对象是否可以用long long型整数表示
 int isObjectRepresentableAsLongLong(robj *o, long long *llval) {
     serverAssertWithInfo(NULL,o,o->type == OBJ_STRING);
     if (o->encoding == OBJ_ENCODING_INT) {
@@ -380,6 +390,7 @@ int isObjectRepresentableAsLongLong(robj *o, long long *llval) {
     }
 }
 
+//尝试对一个字符串进行压缩以节省存储空间，如果无法压缩则增加引用计数后返回
 /* Try to encode a string object in order to save space */
 robj *tryObjectEncoding(robj *o) {
     long value;
@@ -462,6 +473,7 @@ robj *tryObjectEncoding(robj *o) {
 
 /* Get a decoded version of an encoded object (returned as a new object).
  * If the object is already raw-encoded just increment the ref count. */
+//对一个字符串对象进行解码，如果不能解码则增加其引用计数后返回，否则返回一个新对象
 robj *getDecodedObject(robj *o) {
     robj *dec;
 
@@ -488,9 +500,11 @@ robj *getDecodedObject(robj *o) {
  * Important note: when REDIS_COMPARE_BINARY is used a binary-safe comparison
  * is used. */
 
+//以二进制方式进行比较
 #define REDIS_COMPARE_BINARY (1<<0)
+//以本地指定的字符次序进行比较
 #define REDIS_COMPARE_COLL (1<<1)
-
+//比较两个字符串对象是否相等，有两种比较方式：binary（二进制方式）和coll（本地指定的文字排列次序）
 int compareStringObjectsWithFlags(robj *a, robj *b, int flags) {
     serverAssertWithInfo(NULL,a,a->type == OBJ_STRING && b->type == OBJ_STRING);
     char bufa[128], bufb[128], *astr, *bstr;
@@ -524,11 +538,13 @@ int compareStringObjectsWithFlags(robj *a, robj *b, int flags) {
 }
 
 /* Wrapper for compareStringObjectsWithFlags() using binary comparison. */
+//以REDIS_COMPARE_BINARY的方式比较两字符串对象
 int compareStringObjects(robj *a, robj *b) {
     return compareStringObjectsWithFlags(a,b,REDIS_COMPARE_BINARY);
 }
 
 /* Wrapper for compareStringObjectsWithFlags() using collation. */
+//以REDIS_COMPARE_COLL的方式比较两字符串对象
 int collateStringObjects(robj *a, robj *b) {
     return compareStringObjectsWithFlags(a,b,REDIS_COMPARE_COLL);
 }
@@ -548,6 +564,7 @@ int equalStringObjects(robj *a, robj *b) {
     }
 }
 
+//获取字符串对象的长度
 size_t stringObjectLen(robj *o) {
     serverAssertWithInfo(NULL,o,o->type == OBJ_STRING);
     if (sdsEncodedObject(o)) {
@@ -557,6 +574,7 @@ size_t stringObjectLen(robj *o) {
     }
 }
 
+//从字符串对象中解析出一个double型浮点数
 int getDoubleFromObject(robj *o, double *target) {
     double value;
     char *eptr;
@@ -585,6 +603,7 @@ int getDoubleFromObject(robj *o, double *target) {
     return C_OK;
 }
 
+//getDoubleFromObject函数的封装，如果发生错误可以发回指定响应消息
 int getDoubleFromObjectOrReply(client *c, robj *o, double *target, const char *msg) {
     double value;
     if (getDoubleFromObject(o, &value) != C_OK) {
@@ -599,6 +618,7 @@ int getDoubleFromObjectOrReply(client *c, robj *o, double *target, const char *m
     return C_OK;
 }
 
+//从字符串对象中解析出一个long double型浮点数
 int getLongDoubleFromObject(robj *o, long double *target) {
     long double value;
     char *eptr;
@@ -623,6 +643,7 @@ int getLongDoubleFromObject(robj *o, long double *target) {
     return C_OK;
 }
 
+//getLongDoubleFromObject函数的封装，如果发生错误可以发回指定响应消息
 int getLongDoubleFromObjectOrReply(client *c, robj *o, long double *target, const char *msg) {
     long double value;
     if (getLongDoubleFromObject(o, &value) != C_OK) {
@@ -637,6 +658,7 @@ int getLongDoubleFromObjectOrReply(client *c, robj *o, long double *target, cons
     return C_OK;
 }
 
+//从字符串对象中解析出一个long long型整数
 int getLongLongFromObject(robj *o, long long *target) {
     long long value;
 
@@ -656,6 +678,7 @@ int getLongLongFromObject(robj *o, long long *target) {
     return C_OK;
 }
 
+//getLongLongFromObject函数的封装，如果发生错误可以发回指定响应消息
 int getLongLongFromObjectOrReply(client *c, robj *o, long long *target, const char *msg) {
     long long value;
     if (getLongLongFromObject(o, &value) != C_OK) {
@@ -670,6 +693,7 @@ int getLongLongFromObjectOrReply(client *c, robj *o, long long *target, const ch
     return C_OK;
 }
 
+//getLongLongFromObject函数的封装，如果发生错误可以发回指定响应消息
 int getLongFromObjectOrReply(client *c, robj *o, long *target, const char *msg) {
     long long value;
 
@@ -686,6 +710,7 @@ int getLongFromObjectOrReply(client *c, robj *o, long *target, const char *msg) 
     return C_OK;
 }
 
+//返回指定编码方式的字符串描述
 char *strEncoding(int encoding) {
     switch(encoding) {
     case OBJ_ENCODING_RAW: return "raw";
@@ -702,6 +727,7 @@ char *strEncoding(int encoding) {
 
 /* Given an object returns the min number of milliseconds the object was never
  * requested, using an approximated LRU algorithm. */
+//获取LRU clock，用于LRU算法
 unsigned long long estimateObjectIdleTime(robj *o) {
     unsigned long long lruclock = LRU_CLOCK();
     if (lruclock >= o->lru) {
@@ -714,6 +740,7 @@ unsigned long long estimateObjectIdleTime(robj *o) {
 
 /* This is a helper function for the OBJECT command. We need to lookup keys
  * without any modification of LRU or other parameters. */
+//辅助函数：在redisClient对象的db库中查找指定名称的对象
 robj *objectCommandLookup(client *c, robj *key) {
     dictEntry *de;
 
@@ -721,6 +748,7 @@ robj *objectCommandLookup(client *c, robj *key) {
     return (robj*) dictGetVal(de);
 }
 
+//objectCommandLookup函数的封装，可以发回指定的响应消息
 robj *objectCommandLookupOrReply(client *c, robj *key, robj *reply) {
     robj *o = objectCommandLookup(c,key);
 
@@ -730,6 +758,7 @@ robj *objectCommandLookupOrReply(client *c, robj *key, robj *reply) {
 
 /* Object command allows to inspect the internals of an Redis Object.
  * Usage: OBJECT <refcount|encoding|idletime> <key> */
+//OBJECT命令的实现，命令允许从内部察看给定key的Redis对象
 void objectCommand(client *c) {
     robj *o;
 
