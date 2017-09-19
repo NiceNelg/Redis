@@ -91,6 +91,7 @@ static const size_t optimization_level[] = {4096, 8192, 16384, 32768, 65536};
 
 /* Create a new quicklist.
  * Free with quicklistRelease(). */
+//创建快速链表
 quicklist *quicklistCreate(void) {
     struct quicklist *quicklist;
 
@@ -99,11 +100,14 @@ quicklist *quicklistCreate(void) {
     quicklist->len = 0;
     quicklist->count = 0;
     quicklist->compress = 0;
+		//设定ziplist大小限定
     quicklist->fill = -2;
     return quicklist;
 }
 
+//压缩最大深度
 #define COMPRESS_MAX (1 << 16)
+//设置节点压缩深度
 void quicklistSetCompressDepth(quicklist *quicklist, int compress) {
     if (compress > COMPRESS_MAX) {
         compress = COMPRESS_MAX;
@@ -113,7 +117,9 @@ void quicklistSetCompressDepth(quicklist *quicklist, int compress) {
     quicklist->compress = compress;
 }
 
+//ziplist最大值
 #define FILL_MAX (1 << 15)
+//设置节点中的ziplist大小
 void quicklistSetFill(quicklist *quicklist, int fill) {
     if (fill > FILL_MAX) {
         fill = FILL_MAX;
@@ -123,18 +129,21 @@ void quicklistSetFill(quicklist *quicklist, int fill) {
     quicklist->fill = fill;
 }
 
+//封装上述两个函数
 void quicklistSetOptions(quicklist *quicklist, int fill, int depth) {
     quicklistSetFill(quicklist, fill);
     quicklistSetCompressDepth(quicklist, depth);
 }
 
 /* Create a new quicklist with some default parameters. */
+//创建新的快速链表并设置压缩深度和ziplist最大值
 quicklist *quicklistNew(int fill, int compress) {
     quicklist *quicklist = quicklistCreate();
     quicklistSetOptions(quicklist, fill, compress);
     return quicklist;
 }
 
+//私有方法 创建快速链表节点
 REDIS_STATIC quicklistNode *quicklistCreateNode(void) {
     quicklistNode *node;
     node = zmalloc(sizeof(*node));
@@ -142,16 +151,21 @@ REDIS_STATIC quicklistNode *quicklistCreateNode(void) {
     node->count = 0;
     node->sz = 0;
     node->next = node->prev = NULL;
-    node->encoding = QUICKLIST_NODE_ENCODING_RAW;
-    node->container = QUICKLIST_NODE_CONTAINER_ZIPLIST;
-    node->recompress = 0;
+    //默认未压缩
+		node->encoding = QUICKLIST_NODE_ENCODING_RAW;
+    //默认以ziplist方式存储数据
+		node->container = QUICKLIST_NODE_CONTAINER_ZIPLIST;
+    //初始化再压缩标记
+		node->recompress = 0;
     return node;
 }
 
 /* Return cached quicklist count */
+//返回压缩链表中的节点数
 unsigned int quicklistCount(quicklist *ql) { return ql->count; }
 
 /* Free entire quicklist. */
+//释放快速链表内存
 void quicklistRelease(quicklist *quicklist) {
     unsigned long len;
     quicklistNode *current, *next;
@@ -175,6 +189,7 @@ void quicklistRelease(quicklist *quicklist) {
 /* Compress the ziplist in 'node' and update encoding details.
  * Returns 1 if ziplist compressed successfully.
  * Returns 0 if compression failed or if ziplist too small to compress. */
+
 REDIS_STATIC int __quicklistCompressNode(quicklistNode *node) {
 #ifdef REDIS_TEST
     node->attempted_compress = 1;
