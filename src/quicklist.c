@@ -282,11 +282,12 @@ size_t quicklistGetLzf(const quicklistNode *node, void **data) {
  * The only way to guarantee interior nodes get compressed is to iterate
  * to our "interior" compress depth then compress the next node we find.
  * If compress depth is larger than the entire list, we return immediately. */
+//压缩quicklist
 REDIS_STATIC void __quicklistCompress(const quicklist *quicklist, quicklistNode *node) {
     /* If length is less than our compress depth (from both sides),
      * we can't compress anything. */
-    if (!quicklistAllowsCompression(quicklist) ||
-        quicklist->len < (unsigned int)(quicklist->compress * 2))
+		//当不允许压缩quicklist或quicklist的节点个数少于节点压缩深度的2倍时返回空
+    if (!quicklistAllowsCompression(quicklist) || quicklist->len < (unsigned int)(quicklist->compress * 2))
         return;
 
 #if 0
@@ -321,17 +322,23 @@ REDIS_STATIC void __quicklistCompress(const quicklist *quicklist, quicklistNode 
     /* Iterate until we reach compress depth for both sides of the list.a
      * Note: because we do length checks at the *top* of this function,
      *       we can skip explicit null checks below. Everything exists. */
+		//获取quicklist链表头
     quicklistNode *forward = quicklist->head;
+		//获取quicklist链表尾
     quicklistNode *reverse = quicklist->tail;
     int depth = 0;
     int in_depth = 0;
+		//遍历节点数据,当遍历数少于节点压缩深度时( 排除不需要压缩的quicklist链表节点 )
     while (depth++ < quicklist->compress) {
+				//因为不知道quicklist链表是否压缩过,因此都要用quicklistDecompressNode检测是否压缩,如压缩了就解压
         quicklistDecompressNode(forward);
         quicklistDecompressNode(reverse);
 
+				//若节点等于链表头或尾则记录标志位
         if (forward == node || reverse == node)
             in_depth = 1;
 
+				//若quicklist只有一个节点则不需要压缩
         if (forward == reverse)
             return;
 
@@ -339,9 +346,11 @@ REDIS_STATIC void __quicklistCompress(const quicklist *quicklist, quicklistNode 
         reverse = reverse->prev;
     }
 
+		//若此节点符合压缩条件则进行压缩
     if (!in_depth)
         quicklistCompressNode(node);
 
+		//因为上面进行过解压,因此要重新压缩
     if (depth > 2) {
         /* At this point, forward and reverse are one node beyond depth */
         quicklistCompressNode(forward);
@@ -349,6 +358,7 @@ REDIS_STATIC void __quicklistCompress(const quicklist *quicklist, quicklistNode 
     }
 }
 
+//包装函数,若节点是未解压过需要压缩的则用上述函数,否则直接压缩
 #define quicklistCompress(_ql, _node)                                          \
     do {                                                                       \
         if ((_node)->recompress)                                               \
@@ -357,6 +367,7 @@ REDIS_STATIC void __quicklistCompress(const quicklist *quicklist, quicklistNode 
             __quicklistCompress((_ql), (_node));                               \
     } while (0)
 
+//包装函数,检测节点是否需要重新压缩,若是则压缩此节点
 /* If we previously used quicklistDecompressNodeForUse(), just recompress. */
 #define quicklistRecompressOnly(_ql, _node)                                    \
     do {                                                                       \
@@ -368,9 +379,7 @@ REDIS_STATIC void __quicklistCompress(const quicklist *quicklist, quicklistNode 
  * Insert 'new_node' before 'old_node' if 'after' is 0.
  * Note: 'new_node' is *always* uncompressed, so if we assign it to
  *       head or tail, we do not need to uncompress it. */
-REDIS_STATIC void __quicklistInsertNode(quicklist *quicklist,
-                                        quicklistNode *old_node,
-                                        quicklistNode *new_node, int after) {
+REDIS_STATIC void __quicklistInsertNode(quicklist *quicklist, quicklistNode *old_node, quicklistNode *new_node, int after) {
     if (after) {
         new_node->prev = old_node;
         if (old_node) {
