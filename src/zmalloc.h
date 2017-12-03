@@ -37,7 +37,7 @@
 //此处使用#将宏( 这里是#紧跟的那个s)“字符串化”；使用##能将左右两边的标签组合在一起，而且两个标签之间不存在空格
 #define __str(s) #s
 
-//分别判断使用tcmalloc库/jemalloc库/苹果库哪个作为底层的malloc函数调用
+//分别判断使用tcmalloc库/jemalloc库/原生库哪个作为底层的malloc函数调用
 #if defined(USE_TCMALLOC)
 #define ZMALLOC_LIB ("tcmalloc-" __xstr(TC_VERSION_MAJOR) "." __xstr(TC_VERSION_MINOR))
 #include <google/tcmalloc.h>

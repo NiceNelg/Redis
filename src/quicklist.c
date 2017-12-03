@@ -572,6 +572,7 @@ quicklist *quicklistAppendValuesFromZiplist(quicklist *quicklist, unsigned char 
     long long longval;
     char longstr[32] = {0};
 
+		//获取第一个节点
     unsigned char *p = ziplistIndex(zl, 0);
     while (ziplistGet(p, &value, &sz, &longval)) {
         if (!value) {
